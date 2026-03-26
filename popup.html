@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tab Time Tracker</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="header">
+      <div class="brand">
+        <span class="brand-icon" aria-hidden="true"><img src="icons/tabmeter.png" alt="TabMeter logo"></span>
+        <div class="brand-text">
+          <h1>TabMeter: Tab Time Tracker</h1>
+          <p class="tagline">Local-only time per site</p>
+        </div>
+      </div>
+      <div id="active-status" class="active-status" role="status" aria-live="polite"></div>
+      <div class="tabs" role="tablist" aria-label="Time range">
+        <button type="button" class="tab active" data-range="today" role="tab" aria-selected="true" id="tab-today">
+          Today
+        </button>
+        <button type="button" class="tab" data-range="week" role="tab" aria-selected="false" id="tab-week">
+          7 days
+        </button>
+        <button type="button" class="tab" data-range="all" role="tab" aria-selected="false" id="tab-all">
+          All time
+        </button>
+      </div>
+      <div class="view-tabs" role="tablist" aria-label="View">
+        <button type="button" class="view-tab active" data-view="list" role="tab" aria-selected="true" id="view-list">
+          List
+        </button>
+        <button type="button" class="view-tab" data-view="chart" role="tab" aria-selected="false" id="view-chart">
+          Graph
+        </button>
+      </div>
+    </header>
+
+    <p class="hint">
+      Time counts only while this tab is focused and Chrome reports you as active (not idle). Nothing is sent to a
+      server.
+    </p>
+
+    <div id="panel-list" class="panel panel--list">
+      <div id="list" class="list" role="list"></div>
+    </div>
+    <div id="panel-chart" class="panel panel--chart is-hidden" aria-hidden="true">
+      <div id="chart-root" class="chart-root"></div>
+      <p id="chart-caption" class="chart-caption"></p>
+    </div>
+
+    <footer class="footer">
+      <div class="footer-stats">
+        <span id="site-count" class="site-count" aria-live="polite"></span>
+        <span id="total" class="total"></span>
+      </div>
+      <div class="footer-links">
+        <button type="button" class="link-btn" id="open-privacy">Privacy &amp; data</button>
+      </div>
+    </footer>
+    <script src="popup.js"></script>
+  </body>
+</html>

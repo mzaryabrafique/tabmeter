@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy — Tab Time Tracker</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        max-width: 42rem;
+        margin: 2rem auto;
+        padding: 0 1.25rem;
+        line-height: 1.55;
+        color: #1a1a1a;
+      }
+      h1 {
+        font-size: 1.35rem;
+      }
+      h2 {
+        font-size: 1.05rem;
+        margin-top: 1.5rem;
+      }
+      ul {
+        padding-left: 1.25rem;
+      }
+      .muted {
+        color: #52525b;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Tab Time Tracker — Privacy</h1>
+    <p class="muted">Last updated: March 25, 2025</p>
+
+    <p>
+      This extension helps you see how much time you spend on websites while a normal web tab is focused and you are
+      active at your computer. We designed it to align with transparency expectations described in the
+      <a href="https://developer.chrome.com/docs/webstore/program-policies" rel="noopener noreferrer">Chrome Web Store Program Policies</a>
+      and the
+      <a href="https://developer.chrome.com/docs/webstore/program-policies/terms" rel="noopener noreferrer">Chrome Web Store Developer Agreement</a>.
+    </p>
+
+    <h2>What data the extension uses</h2>
+    <ul>
+      <li>
+        <strong>Website hostname</strong> (for example <code>example.com</code>) derived from the URL of the active tab,
+        only for <code>http:</code> and <code>https:</code> pages.
+      </li>
+      <li>
+        <strong>Aggregated time</strong> in seconds per hostname, stored by calendar day on your device.
+      </li>
+      <li>
+        <strong>Temporary session state</strong> (which tab is being timed and when it started) kept only in the browser
+        session and cleared when appropriate.
+      </li>
+    </ul>
+
+    <h2>Where your data goes</h2>
+    <p>
+      All of this stays <strong>on your device</strong> using Chrome’s extension storage. We do not send your browsing
+      or time data to our servers. There is no account, analytics SDK, or third‑party advertising in this extension.
+    </p>
+
+    <h2>Why each permission is needed</h2>
+    <ul>
+      <li><strong>storage</strong> — Save your daily time totals locally.</li>
+      <li><strong>tabs</strong> — Read the active tab’s URL (hostname only in practice) to attribute time to a site.</li>
+      <li><strong>windows</strong> — Know when Chrome is focused so time is not counted in the background.</li>
+      <li><strong>alarms</strong> — Run a short periodic task to save elapsed time reliably.</li>
+      <li><strong>idle</strong> — Pause counting when you are idle, as reported by Chrome.</li>
+    </ul>
+
+    <h2>Your control</h2>
+    <p>
+      You can remove all stored data by uninstalling the extension or clearing extension data for this extension in
+      Chrome settings. The extension only records time according to the rules above; it does not change page content or
+      inject scripts into websites for tracking.
+    </p>
+
+    <h2>Contact</h2>
+    <p>
+      For questions about this policy, use the contact information you provide on your Chrome Web Store listing (muhammadzaryabrafique@gmail.com).
+    </p>
+
+    <p class="muted">
+      This page is part of the extension package. For Google’s own privacy practices when you use Chrome or Google
+      services, see
+      <a href="https://policies.google.com/privacy?hl=en" rel="noopener noreferrer">Google’s Privacy Policy</a>.
+    </p>
+  </body>
+</html>
