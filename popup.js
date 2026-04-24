@@ -36,6 +36,7 @@ async function updateActiveStatus(statusEl) {
 
     let text = "";
     let variant = "is-neutral";
+    let targetHost = null;
 
     if (!tab) {
       text = "No tab in this window.";
@@ -44,9 +45,10 @@ async function updateActiveStatus(statusEl) {
       const host = parseHostname(tab.url || "");
 
       if (!host) {
-        text = "This tab isn’t tracked — use a normal website (http/https) to see active time here.";
+        text = "This tab isn’t tracked, use a normal website (http/https) to see active time here.";
         variant = "is-muted";
       } else {
+        targetHost = host;
         const trackingThisTab =
           session && session.tabId === tab.id && session.hostname === host;
 
@@ -57,7 +59,7 @@ async function updateActiveStatus(statusEl) {
           text = `Time is counting on another tab: ${session.hostname}`;
           variant = "is-other";
         } else {
-          text = "Not recording — focus this tab on a website (idle pauses the timer).";
+          text = "Not recording, focus this tab on a website (idle pauses the timer).";
           variant = "is-waiting";
         }
       }
@@ -68,17 +70,37 @@ async function updateActiveStatus(statusEl) {
       lastStatusSnapshot.text === text &&
       lastStatusSnapshot.variant === variant
     ) {
+      // It's the same visual state, but we might have changed host.
+      // Update the targetHost silently.
+      if (quickLimitBtn) {
+        if (targetHost) {
+          quickLimitBtn.classList.remove("is-hidden");
+          quickLimitBtn.dataset.host = targetHost;
+        } else {
+          quickLimitBtn.classList.add("is-hidden");
+        }
+      }
       return;
     }
     lastStatusSnapshot = { text, variant };
 
     statusEl.textContent = text;
     statusEl.className = `active-status ${variant}`;
+    
+    if (quickLimitBtn) {
+      if (targetHost) {
+        quickLimitBtn.classList.remove("is-hidden");
+        quickLimitBtn.dataset.host = targetHost;
+      } else {
+        quickLimitBtn.classList.add("is-hidden");
+      }
+    }
   } catch {
     if (lastStatusSnapshot?.text !== "") {
       lastStatusSnapshot = { text: "", variant: "is-neutral" };
       statusEl.textContent = "";
       statusEl.className = "active-status is-neutral";
+      if (quickLimitBtn) quickLimitBtn.classList.add("is-hidden");
     }
   }
 }
@@ -205,8 +227,8 @@ function applyFooter(totalEl, siteCountEl, aggregated) {
   totalEl.textContent = formatDuration(total);
 }
 
-function renderList(listEl, aggregated) {
-  const fp = aggregatedFingerprint(aggregated);
+function renderList(listEl, aggregated, siteLimits = {}) {
+  const fp = aggregatedFingerprint(aggregated) + JSON.stringify(siteLimits);
   if (fp === lastListFingerprint && listEl.childElementCount > 0) {
     applyFooter(totalEl, siteCountEl, aggregated);
     return;
@@ -233,10 +255,34 @@ function renderList(listEl, aggregated) {
     const main = document.createElement("div");
     main.className = "row-main";
 
+    const hostContainer = document.createElement("div");
+    hostContainer.className = "host-container";
+
     const hostEl = document.createElement("div");
     hostEl.className = "host";
     hostEl.title = host;
     hostEl.textContent = host;
+    hostContainer.appendChild(hostEl);
+
+    // Limit Badge UI
+    const limitMin = siteLimits[host];
+    if (limitMin && limitMin > 0) {
+      const limitBadge = document.createElement("div");
+      limitBadge.className = "limit-badge";
+      limitBadge.title = `Daily limit: ${limitMin}m`;
+      limitBadge.textContent = `${limitMin}m limit`;
+      hostContainer.appendChild(limitBadge);
+    }
+    
+    // Set limit button
+    const limitBtn = document.createElement("button");
+    limitBtn.type = "button";
+    limitBtn.className = "limit-btn";
+    limitBtn.title = limitMin ? "Edit Limit" : "Set Limit";
+    limitBtn.innerHTML = "⏱️";
+    limitBtn.dataset.host = host;
+    limitBtn.addEventListener("click", () => openLimitModal(host, limitMin));
+    hostContainer.appendChild(limitBtn);
 
     const barWrap = document.createElement("div");
     barWrap.className = "bar-wrap";
@@ -246,7 +292,7 @@ function renderList(listEl, aggregated) {
     bar.style.width = `${pct}%`;
     barWrap.appendChild(bar);
 
-    main.appendChild(hostEl);
+    main.appendChild(hostContainer);
     main.appendChild(barWrap);
 
     const timeEl = document.createElement("div");
@@ -631,6 +677,7 @@ const listEl = document.getElementById("list");
 const totalEl = document.getElementById("total");
 const siteCountEl = document.getElementById("site-count");
 const statusEl = document.getElementById("active-status");
+const quickLimitBtn = document.getElementById("quick-limit-btn");
 const rangeTabButtons = [...document.querySelectorAll(".tabs .tab")];
 const viewTabButtons = [...document.querySelectorAll(".view-tab")];
 const privacyBtn = document.getElementById("open-privacy");
@@ -640,10 +687,25 @@ const chartCaptionEl = document.getElementById("chart-caption");
 let currentRange = "today";
 let currentView = "list";
 
+const STORAGE_LIMITS = "siteLimits";
+
+async function loadSiteLimits() {
+  const { [STORAGE_LIMITS]: limits } = await chrome.storage.local.get(STORAGE_LIMITS);
+  return limits && typeof limits === "object" ? limits : {};
+}
+
+async function saveSiteLimits(limits) {
+  await chrome.storage.local.set({ [STORAGE_LIMITS]: limits });
+  // Invalidate UI cache
+  lastListFingerprint = null;
+  loadAndPaint();
+}
+
 async function loadAndPaint() {
   const agg = await loadAggregated(currentRange);
+  const limits = await loadSiteLimits();
   if (currentView === "list") {
-    renderList(listEl, agg);
+    renderList(listEl, agg, limits);
   } else if (chartRoot && chartCaptionEl) {
     await renderChartPanel(chartRoot, chartCaptionEl, currentRange, agg);
   } else {
@@ -725,6 +787,199 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
+// --- Modal Logic ---
+const limitModal = document.getElementById("limit-modal");
+const limitOverlay = document.getElementById("limit-modal-overlay");
+const limitHostName = document.getElementById("limit-host-name");
+const limitInput = document.getElementById("limit-input-minutes");
+const limitBtnSave = document.getElementById("limit-btn-save");
+const limitBtnRemove = document.getElementById("limit-btn-remove");
+const limitBtnCancel = document.getElementById("limit-btn-cancel");
+
+let currentModalHost = null;
+
+function openLimitModal(host, currentLimit) {
+  currentModalHost = host;
+  limitHostName.textContent = host;
+  if (currentLimit) {
+    limitInput.value = currentLimit;
+    limitBtnRemove.style.display = "inline-flex";
+  } else {
+    limitInput.value = "";
+    limitBtnRemove.style.display = "none";
+  }
+  limitModal.classList.remove("is-hidden");
+  limitModal.setAttribute("aria-hidden", "false");
+  limitInput.focus();
+}
+
+function closeLimitModal() {
+  currentModalHost = null;
+  limitModal.classList.add("is-hidden");
+  limitModal.setAttribute("aria-hidden", "true");
+}
+
+limitOverlay.addEventListener("click", closeLimitModal);
+limitBtnCancel.addEventListener("click", closeLimitModal);
+
+limitBtnSave.addEventListener("click", async () => {
+  if (!currentModalHost) return;
+  const val = parseInt(limitInput.value, 10);
+  if (!isNaN(val) && val > 0) {
+    const lims = await loadSiteLimits();
+    lims[currentModalHost] = val;
+    await saveSiteLimits(lims);
+  }
+  closeLimitModal();
+});
+
+limitBtnRemove.addEventListener("click", async () => {
+  if (!currentModalHost) return;
+  const lims = await loadSiteLimits();
+  if (lims[currentModalHost]) {
+    delete lims[currentModalHost];
+    await saveSiteLimits(lims);
+  }
+  closeLimitModal();
+});
+
+if (quickLimitBtn) {
+  quickLimitBtn.addEventListener("click", async () => {
+    const host = quickLimitBtn.dataset.host;
+    if (!host) return;
+    const limits = await loadSiteLimits();
+    openLimitModal(host, limits[host] || 0);
+  });
+}
+
 setViewPanels(currentView);
 attachPopupListeners();
 refreshAll();
+
+// ─── Sidebar Logic ───────────────────────────────────────
+
+const sidebarToggle = document.getElementById("sidebar-toggle");
+const sidebar = document.getElementById("sidebar");
+const sidebarOverlay = document.getElementById("sidebar-overlay");
+const sidebarClose = document.getElementById("sidebar-close");
+const sidebarPrivacyBtn = document.getElementById("sidebar-privacy-btn");
+const sidebarSidePanelBtn = document.getElementById("sidebar-sidepanel-btn");
+const sidebarSettingsBtn = document.getElementById("sidebar-settings-btn");
+const sidebarHelpBtn = document.getElementById("sidebar-help-btn");
+const sidebarSupportBtn = document.getElementById("sidebar-support-btn");
+
+function openSidebar() {
+  sidebar.classList.add("is-open");
+  sidebar.setAttribute("aria-hidden", "false");
+  sidebarOverlay.classList.add("is-visible");
+  sidebarToggle.setAttribute("aria-expanded", "true");
+  document.body.classList.add("sidebar-is-open");
+  // Focus the close button for accessibility
+  requestAnimationFrame(() => sidebarClose.focus());
+}
+
+function closeSidebar() {
+  sidebar.classList.remove("is-open");
+  sidebar.setAttribute("aria-hidden", "true");
+  sidebarOverlay.classList.remove("is-visible");
+  sidebarToggle.setAttribute("aria-expanded", "false");
+  document.body.classList.remove("sidebar-is-open");
+  sidebarToggle.focus();
+}
+
+if (sidebarToggle) sidebarToggle.addEventListener("click", openSidebar);
+if (sidebarClose) sidebarClose.addEventListener("click", closeSidebar);
+if (sidebarOverlay) sidebarOverlay.addEventListener("click", closeSidebar);
+
+// Escape key closes sidebar
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && sidebar.classList.contains("is-open")) {
+    closeSidebar();
+  }
+});
+
+// Sidebar privacy link
+if (sidebarPrivacyBtn) {
+  sidebarPrivacyBtn.addEventListener("click", () => {
+    const url = chrome.runtime.getURL("privacy.html");
+    chrome.tabs.create({ url });
+    closeSidebar();
+  });
+}
+
+// Detect if we are currently in the popup
+let isPopup = true;
+try {
+  isPopup = chrome.extension.getViews({ type: "popup" }).includes(window);
+} catch (e) {
+  console.warn("Could not determine view type:", e);
+}
+
+// Side Panel / Popup toggle button
+if (sidebarSidePanelBtn) {
+  const btnText = sidebarSidePanelBtn.querySelector('.sidebar-item-text');
+  if (!isPopup && btnText) {
+    btnText.textContent = "Switch to popup";
+  }
+
+  sidebarSidePanelBtn.addEventListener("click", async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      
+      if (isPopup) {
+        // Switch to Side Panel mode
+        await chrome.storage.local.set({ viewMode: "side_panel" });
+        await chrome.action.setPopup({ popup: "" });
+        
+        if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
+          await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+          await chrome.sidePanel.open({ windowId: tab.windowId });
+        } else {
+          console.info("Side Panel API is not available.");
+        }
+        window.close(); // Close the popup after opening side panel
+      } else {
+        // Switch to Popup mode
+        await chrome.storage.local.set({ viewMode: "popup" });
+        await chrome.action.setPopup({ popup: "popup.html" });
+        
+        if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
+          await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+        }
+        
+        if (chrome.action && chrome.action.openPopup) {
+          // await chrome.action.openPopup({ windowId: tab.windowId });
+        } else {
+          console.info("Open Popup API is not available in this browser version.");
+        }
+        window.close(); // Close the side panel
+      }
+    } catch (err) {
+      console.warn("Could not toggle view:", err);
+    }
+  });
+}
+
+// Settings button (placeholder — can be expanded later)
+if (sidebarSettingsBtn) {
+  sidebarSettingsBtn.addEventListener("click", () => {
+    // For now, close sidebar. Settings page can be added later.
+    closeSidebar();
+  });
+}
+
+// Help button
+if (sidebarHelpBtn) {
+  sidebarHelpBtn.addEventListener("click", () => {
+    // Open help/documentation — placeholder URL
+    closeSidebar();
+  });
+}
+
+// Support button
+if (sidebarSupportBtn) {
+  sidebarSupportBtn.addEventListener("click", () => {
+    // Open support page — placeholder
+    closeSidebar();
+  });
+}

@@ -54,7 +54,7 @@ A Chrome/Edge extension that tracks active time spent per website hostname while
 
 ## 🧾 Release notes
 
-- `1.0.2` (current): baseline stable implementation
+- `1.1.0` (current): baseline stable implementation
 
 ## 📌 Known behavior
 

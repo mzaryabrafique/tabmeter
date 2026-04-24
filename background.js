@@ -35,6 +35,26 @@ async function saveStats(stats) {
   await chrome.storage.local.set({ [STORAGE_STATS]: stats });
 }
 
+const STORAGE_LIMITS = "siteLimits";
+
+async function getLimits() {
+  const { [STORAGE_LIMITS]: limits } = await chrome.storage.local.get(STORAGE_LIMITS);
+  return limits && typeof limits === "object" ? limits : {};
+}
+
+async function isHostBlocked(hostname) {
+  if (!hostname) return false;
+  const limits = await getLimits();
+  const limitMin = limits[hostname];
+  if (!limitMin || limitMin <= 0) return false;
+
+  const stats = await getStats();
+  const key = localDayKey();
+  const todaySec = stats.days?.[key]?.[hostname] || 0;
+
+  return todaySec >= limitMin * 60;
+}
+
 async function addSecondsForHost(hostname, seconds) {
   if (!hostname || seconds <= 0) return;
   const key = localDayKey();
@@ -75,6 +95,10 @@ async function flushSession({ keep = false } = {}) {
       ...session,
       startedAt: now,
     });
+    if (await isHostBlocked(session.hostname)) {
+       const blockedUrl = chrome.runtime.getURL(`blocked.html?host=${encodeURIComponent(session.hostname)}`);
+       chrome.tabs.update(session.tabId, { url: blockedUrl }).catch(() => {});
+    }
   } else {
     await setSession(null);
   }
@@ -87,6 +111,14 @@ async function startSessionFromTab(tab) {
     return;
   }
   const hostname = parseHostname(tab.url);
+
+  if (await isHostBlocked(hostname)) {
+    await setSession(null);
+    const blockedUrl = chrome.runtime.getURL(`blocked.html?host=${encodeURIComponent(hostname)}`);
+    chrome.tabs.update(tab.id, { url: blockedUrl }).catch(() => {});
+    return;
+  }
+
   await setSession({
     tabId: tab.id,
     windowId: tab.windowId,
@@ -184,16 +216,43 @@ function ensureAlarm() {
   });
 }
 
+ensureAlarm();
+chrome.idle.setDetectionInterval(60);
+syncToActiveTab();
+
+// --- View Mode Preference ---
+const STORAGE_VIEW_MODE = "viewMode";
+
+async function applyViewModePreference() {
+  const { [STORAGE_VIEW_MODE]: mode } = await chrome.storage.local.get(STORAGE_VIEW_MODE);
+  
+  if (mode === "side_panel") {
+    // If preference is side panel, disable popup and enable side panel on click
+    await chrome.action.setPopup({ popup: "" });
+    if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
+      await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+    }
+  } else {
+    // Default is popup
+    await chrome.action.setPopup({ popup: "popup.html" });
+    if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
+      await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+    }
+  }
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   ensureAlarm();
   chrome.idle.setDetectionInterval(60);
   syncToActiveTab();
+  applyViewModePreference();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   ensureAlarm();
   chrome.idle.setDetectionInterval(60);
   syncToActiveTab();
+  applyViewModePreference();
 });
 
 chrome.tabs.onActivated.addListener((info) => {
@@ -227,6 +286,5 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   await syncToActiveTab();
 });
 
-ensureAlarm();
-chrome.idle.setDetectionInterval(60);
-syncToActiveTab();
+// Also apply immediately
+applyViewModePreference();

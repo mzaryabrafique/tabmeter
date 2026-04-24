@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Time's Up! Limit Reached</title>
+  <link rel="stylesheet" href="blocked.css">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Outfit:wght@600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="block-card">
+    <div class="icon-container">
+      <span class="lock-icon">🛑</span>
+    </div>
+    <h1 class="title">Daily Limit Reached!</h1>
+    <p class="description">You've used up your allowed time for <strong id="blocked-host" class="highlight">this website</strong> today.</p>
+    
+    <div class="action-container">
+      <button id="close-tab-btn" class="btn btn-primary">Close Tab & Get Back to Work</button>
+    </div>
+    <p class="hint">To adjust limits, open the TabMeter extension popup.</p>
+  </div>
+  
+  <script src="blocked.js"></script>
+</body>
+</html>
