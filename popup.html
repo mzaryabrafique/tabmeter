@@ -37,6 +37,17 @@
       </div>
     </header>
 
+    <div class="stats-card">
+      <div class="stat-item">
+        <span class="stat-label">Sites Visited</span>
+        <span id="site-count" class="stat-value" aria-live="polite">0</span>
+      </div>
+      <div class="stat-item align-right">
+        <span class="stat-label">Total Tracked</span>
+        <span id="total" class="stat-value">0s</span>
+      </div>
+    </div>
+
     <p class="hint">
       Time counts only while this tab is focused and Chrome reports you as active (not idle). Nothing is sent to a
       server.
@@ -51,10 +62,6 @@
     </div>
 
     <footer class="footer">
-      <div class="footer-stats">
-        <span id="site-count" class="site-count" aria-live="polite"></span>
-        <span id="total" class="total"></span>
-      </div>
       <div class="footer-links">
         <button type="button" class="link-btn" id="open-privacy">Privacy &amp; data</button>
       </div>

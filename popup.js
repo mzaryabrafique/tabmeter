@@ -127,9 +127,7 @@ function sortedEntries(obj) {
 }
 
 function sitesVisitedLabel(count) {
-  if (count === 0) return "Sites: 0";
-  if (count === 1) return "Sites: 1";
-  return `Sites: ${count}`;
+  return count.toString();
 }
 
 function aggregatedFingerprint(aggregated) {
@@ -203,8 +201,8 @@ let lastListFingerprint = null;
 function applyFooter(totalEl, siteCountEl, aggregated) {
   const entries = sortedEntries(aggregated);
   const total = entries.reduce((sum, [, sec]) => sum + sec, 0);
-  if (siteCountEl) siteCountEl.textContent = sitesVisitedLabel(entries.length);
-  totalEl.textContent = `Total: ${formatDuration(total)}`;
+  if (siteCountEl) siteCountEl.textContent = entries.length.toString();
+  totalEl.textContent = formatDuration(total);
 }
 
 function renderList(listEl, aggregated) {
