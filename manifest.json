@@ -3,8 +3,14 @@
   "name": "TabMeter: Tab Time Tracker",
   "version": "1.0.2",
   "description": "See time spent per website while a tab is focused and you are active. Data stays on your device only.",
-  "permissions": ["storage", "tabs", "windows", "alarms", "idle"],
-   "icons": {
+  "permissions": [
+    "storage",
+    "tabs",
+    "windows",
+    "alarms",
+    "idle"
+  ],
+  "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
     "48": "icons/icon48.png",
