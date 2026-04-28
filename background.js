@@ -174,14 +174,18 @@ async function onTabUpdated(tabId, changeInfo, tab) {
   const urlOrNavDone =
     changeInfo.status === "complete" || changeInfo.url !== undefined;
   if (!urlOrNavDone) return;
+  if (!tab.active) return;
+
   const win = await chrome.windows.get(tab.windowId).catch(() => null);
   if (!win?.focused) return;
 
   const idleState = await chrome.idle.queryState(60);
   if (idleState !== "active") return;
-  const session = await getSession();
-  if (session?.tabId !== tabId) return;
-  if (!tab.active) return;
+
+  // Always start a session for the active tab when its URL changes or
+  // finishes loading.  The previous guard (session?.tabId !== tabId) caused
+  // new tabs to be silently skipped because the session was still bound to
+  // the previous tab.
   await startSessionFromTab(tab);
 }
 
@@ -277,6 +281,14 @@ chrome.idle.onStateChanged.addListener((s) => {
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== ALARM_TICK) return;
+
+  // Pause tracking when user is idle (AFK / screen locked)
+  const idleState = await chrome.idle.queryState(60);
+  if (idleState !== "active") {
+    await flushSession({ keep: false });
+    return;
+  }
+
   const win = await chrome.windows.getLastFocused().catch(() => null);
   if (!win?.focused) {
     await flushSession({ keep: false });
