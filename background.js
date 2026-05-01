@@ -220,12 +220,9 @@ function ensureAlarm() {
   });
 }
 
-ensureAlarm();
-chrome.idle.setDetectionInterval(60);
-syncToActiveTab();
-
-// --- View Mode Preference ---
+// --- Config Preference ---
 const STORAGE_VIEW_MODE = "viewMode";
+const STORAGE_IDLE_TIMEOUT = "idleTimeout";
 
 async function applyViewModePreference() {
   const { [STORAGE_VIEW_MODE]: mode } = await chrome.storage.local.get(STORAGE_VIEW_MODE);
@@ -245,16 +242,29 @@ async function applyViewModePreference() {
   }
 }
 
+async function applyIdleTimeoutPreference() {
+  const { [STORAGE_IDLE_TIMEOUT]: timeout } = await chrome.storage.local.get(STORAGE_IDLE_TIMEOUT);
+  if (timeout && typeof timeout === "number") {
+    chrome.idle.setDetectionInterval(timeout);
+  } else {
+    chrome.idle.setDetectionInterval(60);
+  }
+}
+
+ensureAlarm();
+applyIdleTimeoutPreference();
+syncToActiveTab();
+
 chrome.runtime.onInstalled.addListener(() => {
   ensureAlarm();
-  chrome.idle.setDetectionInterval(60);
+  applyIdleTimeoutPreference();
   syncToActiveTab();
   applyViewModePreference();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   ensureAlarm();
-  chrome.idle.setDetectionInterval(60);
+  applyIdleTimeoutPreference();
   syncToActiveTab();
   applyViewModePreference();
 });

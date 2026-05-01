@@ -198,6 +198,47 @@ async function loadWeekDaySeries() {
   return series;
 }
 
+/** Load daily totals for the line chart.
+ *  - "today" / "week": last 7 days
+ *  - "all": all recorded days (capped at 30 most recent) */
+async function loadDailyTotals(range) {
+  const days = await loadStatsDays();
+  const todayKey = localDayKey();
+  const entries = [];
+
+  if (range === "today" || range === "week") {
+    for (let i = 6; i >= 0; i--) {
+      const dt = addDays(new Date(), -i);
+      const key = localDayKey(dt);
+      const bucket = days[key] && typeof days[key] === "object" ? days[key] : {};
+      entries.push({
+        label: shortDayLabel(dt),
+        value: totalBucketSeconds(bucket),
+        isToday: i === 0,
+        dayKey: key,
+      });
+    }
+  } else {
+    const allKeys = Object.keys(days).sort();
+    for (const key of allKeys) {
+      const bucket = days[key] && typeof days[key] === "object" ? days[key] : {};
+      const parts = key.split("-");
+      const dt = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      entries.push({
+        label: shortDayLabel(dt),
+        value: totalBucketSeconds(bucket),
+        isToday: key === todayKey,
+        dayKey: key,
+      });
+    }
+    // Cap at 30 most recent days
+    if (entries.length > 30) {
+      entries.splice(0, entries.length - 30);
+    }
+  }
+  return entries;
+}
+
 function totalBucketSeconds(bucket) {
   let t = 0;
   for (const v of Object.values(bucket)) {
@@ -608,9 +649,164 @@ function buildLegend(container, legendHosts) {
   container.appendChild(wrap);
 }
 
+/** Render a smooth line chart SVG from daily totals. */
+function renderLineChart(container, entries) {
+  container.replaceChildren();
+
+  if (!entries.length || entries.every((e) => e.value === 0)) {
+    const empty = document.createElement("div");
+    empty.className = "line-empty-text";
+    empty.textContent = "No activity data yet";
+    container.appendChild(empty);
+    return;
+  }
+
+  const W = 336;
+  const H = 140;
+  const padL = 38;
+  const padR = 12;
+  const padT = 14;
+  const padB = 26;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+
+  const svg = elSvg("svg", { viewBox: `0 0 ${W} ${H}`, "aria-hidden": "false" });
+  svg.setAttribute(
+    "aria-label",
+    `Activity trend line chart with ${entries.length} data points.`
+  );
+
+  const maxVal = Math.max(...entries.map((e) => e.value));
+  const safeMax = maxVal > 0 ? maxVal : 1;
+
+  // Defs: gradient fill under the line
+  const defs = elSvg("defs");
+  const gradId = "line-area-grad-" + Math.random().toString(36).slice(2, 8);
+  const grad = elSvg("linearGradient", { id: gradId, x1: "0", y1: "0", x2: "0", y2: "1" });
+  const stop1 = elSvg("stop", { offset: "0%", "stop-color": "#ff3b34", "stop-opacity": "0.18" });
+  const stop2 = elSvg("stop", { offset: "100%", "stop-color": "#ffb74f", "stop-opacity": "0.02" });
+  grad.appendChild(stop1);
+  grad.appendChild(stop2);
+  defs.appendChild(grad);
+  svg.appendChild(defs);
+
+  // Horizontal grid lines
+  const gridCount = 4;
+  for (let i = 0; i <= gridCount; i++) {
+    const y = padT + (chartH * i) / gridCount;
+    const val = safeMax * (1 - i / gridCount);
+
+    svg.appendChild(
+      elSvg("line", {
+        x1: padL,
+        y1: y,
+        x2: W - padR,
+        y2: y,
+        stroke: i === gridCount ? "#e4e4e7" : "#f2f3f5",
+        "stroke-width": "1",
+        "stroke-dasharray": i > 0 && i < gridCount ? "3,3" : "0",
+      })
+    );
+
+    // Y-axis labels (skip 0 at bottom for cleanliness)
+    if (i < gridCount) {
+      const lab = elSvg("text", {
+        x: padL - 6,
+        y: y + 3.5,
+        "text-anchor": "end",
+        fill: "#a1a1aa",
+        "font-size": "8.5",
+        "font-family": "system-ui,sans-serif",
+      });
+      lab.textContent = formatAxisDuration(val);
+      svg.appendChild(lab);
+    }
+  }
+
+  // Calculate points
+  const n = entries.length;
+  const points = entries.map((e, i) => {
+    const x = n === 1 ? padL + chartW / 2 : padL + (i / (n - 1)) * chartW;
+    const y = padT + chartH - (e.value / safeMax) * chartH;
+    return { x, y, ...e };
+  });
+
+  // Build smooth path (cubic bezier)
+  if (points.length > 1) {
+    let pathD = `M${points[0].x},${points[0].y}`;
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const curr = points[i];
+      const cpx = (prev.x + curr.x) / 2;
+      pathD += ` C${cpx},${prev.y} ${cpx},${curr.y} ${curr.x},${curr.y}`;
+    }
+
+    // Area fill
+    const areaD =
+      pathD +
+      ` L${points[points.length - 1].x},${padT + chartH}` +
+      ` L${points[0].x},${padT + chartH} Z`;
+    svg.appendChild(
+      elSvg("path", {
+        d: areaD,
+        fill: `url(#${gradId})`,
+      })
+    );
+
+    // Line stroke
+    svg.appendChild(
+      elSvg("path", {
+        d: pathD,
+        fill: "none",
+        stroke: "#ff3b34",
+        "stroke-width": "2",
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+      })
+    );
+  }
+
+  // Data point dots
+  points.forEach((p) => {
+    svg.appendChild(
+      elSvg("circle", {
+        cx: p.x,
+        cy: p.y,
+        r: p.isToday ? "4" : "2.5",
+        fill: p.isToday ? "#ff3b34" : "#ffffff",
+        stroke: "#ff3b34",
+        "stroke-width": p.isToday ? "2" : "1.5",
+      })
+    );
+  });
+
+  // X-axis labels — show at most 7 evenly spaced
+  const maxLabels = 7;
+  const step = Math.max(1, Math.ceil(n / maxLabels));
+  points.forEach((p, i) => {
+    if (n > maxLabels && i % step !== 0 && i !== n - 1) return;
+    const lab = elSvg("text", {
+      x: p.x,
+      y: H - 4,
+      "text-anchor": "middle",
+      fill: p.isToday ? "#ff3b34" : "#71717a",
+      "font-size": "8.5",
+      "font-weight": p.isToday ? "600" : "400",
+      "font-family": "system-ui,sans-serif",
+    });
+    lab.textContent = p.label;
+    svg.appendChild(lab);
+  });
+
+  container.appendChild(svg);
+}
+
+const chartLineRoot = document.getElementById("chart-line-root");
+
 async function renderChartPanel(chartRoot, captionEl, range, aggregated) {
   let fp;
   let series = null;
+  let dailyTotals = null;
 
   if (range === "week") {
     series = await loadWeekDaySeries();
@@ -619,12 +815,22 @@ async function renderChartPanel(chartRoot, captionEl, range, aggregated) {
     fp = `${range}|${aggregatedFingerprint(aggregated)}`;
   }
 
+  // Load daily totals for the line chart
+  dailyTotals = await loadDailyTotals(range);
+  fp += `|line:${JSON.stringify(dailyTotals.map((d) => d.value))}`;
+
   if (fp === lastChartFingerprint && chartRoot.querySelector("svg")) {
     applyFooter(totalEl, siteCountEl, aggregated);
     return;
   }
   lastChartFingerprint = fp;
 
+  // Render line chart
+  if (chartLineRoot) {
+    renderLineChart(chartLineRoot, dailyTotals);
+  }
+
+  // Render bar / stacked chart
   chartRoot.replaceChildren();
   const svg = elSvg("svg", { "aria-hidden": "false" });
   let caption = "";
@@ -960,26 +1166,253 @@ if (sidebarSidePanelBtn) {
   });
 }
 
-// Settings button (placeholder — can be expanded later)
+// Settings button — open inline settings panel
 if (sidebarSettingsBtn) {
   sidebarSettingsBtn.addEventListener("click", () => {
-    // For now, close sidebar. Settings page can be added later.
     closeSidebar();
+    openSettingsPanel();
   });
 }
 
-// Help button
+// Help button — open inline help panel
 if (sidebarHelpBtn) {
   sidebarHelpBtn.addEventListener("click", () => {
-    // Open help/documentation — placeholder URL
     closeSidebar();
+    openHelpPanel();
   });
 }
 
-// Support button
+// Support button — open inline support panel
 if (sidebarSupportBtn) {
   sidebarSupportBtn.addEventListener("click", () => {
-    // Open support page — placeholder
     closeSidebar();
+    openSupportPanel();
+  });
+}
+
+// ─── Inline Settings Panel ───────────────────────────────
+
+const STORAGE_IDLE_TIMEOUT = "idleTimeout";
+
+const settingsPanel = document.getElementById("settings-panel");
+const settingsBackBtn = document.getElementById("settings-back-btn");
+const idleTimeoutSelect = document.getElementById("idle-timeout-select");
+const viewModeSelect = document.getElementById("view-mode-select");
+const exportDataBtn = document.getElementById("export-data-btn");
+const clearDataBtn = document.getElementById("clear-data-btn");
+const settingsToast = document.getElementById("settings-toast");
+
+// ─── Generic panel open/close helpers ────────────────────
+
+function openPanel(panel, backBtn) {
+  panel.classList.remove("is-hidden");
+  panel.setAttribute("aria-hidden", "false");
+  void panel.offsetWidth;
+  panel.classList.add("is-visible");
+  if (backBtn) backBtn.focus();
+}
+
+function closePanel(panel) {
+  panel.classList.remove("is-visible");
+  const onEnd = () => {
+    panel.classList.add("is-hidden");
+    panel.setAttribute("aria-hidden", "true");
+    panel.removeEventListener("transitionend", onEnd);
+  };
+  panel.addEventListener("transitionend", onEnd);
+}
+
+// ─── Settings ────────────────────────────────────────────
+
+function openSettingsPanel() {
+  loadSettingsValues();
+  openPanel(settingsPanel, settingsBackBtn);
+}
+
+function closeSettingsPanel() {
+  closePanel(settingsPanel);
+}
+
+if (settingsBackBtn) {
+  settingsBackBtn.addEventListener("click", closeSettingsPanel);
+}
+
+// Escape key closes any open panel
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (settingsPanel && !settingsPanel.classList.contains("is-hidden")) {
+    closeSettingsPanel();
+  } else if (helpPanel && !helpPanel.classList.contains("is-hidden")) {
+    closeHelpPanel();
+  } else if (supportPanel && !supportPanel.classList.contains("is-hidden")) {
+    closeSupportPanel();
+  }
+});
+
+function showSettingsToast(message) {
+  settingsToast.textContent = message;
+  settingsToast.classList.remove("is-hidden");
+  // Reset animation
+  settingsToast.style.animation = "none";
+  void settingsToast.offsetWidth;
+  settingsToast.style.animation = "";
+
+  clearTimeout(settingsToast._hideTimer);
+  settingsToast._hideTimer = setTimeout(() => {
+    settingsToast.classList.add("is-hidden");
+  }, 2500);
+}
+
+async function loadSettingsValues() {
+  const data = await chrome.storage.local.get(["viewMode", STORAGE_IDLE_TIMEOUT]);
+
+  if (viewModeSelect) {
+    viewModeSelect.value = data.viewMode || "popup";
+  }
+  if (idleTimeoutSelect) {
+    idleTimeoutSelect.value = (data[STORAGE_IDLE_TIMEOUT] || 60).toString();
+  }
+}
+
+// Idle Timeout change
+if (idleTimeoutSelect) {
+  idleTimeoutSelect.addEventListener("change", async (e) => {
+    const timeout = parseInt(e.target.value, 10);
+    await chrome.storage.local.set({ [STORAGE_IDLE_TIMEOUT]: timeout });
+    chrome.idle.setDetectionInterval(timeout);
+    showSettingsToast("Idle timeout updated");
+  });
+}
+
+// View Mode change
+if (viewModeSelect) {
+  viewModeSelect.addEventListener("change", async (e) => {
+    const mode = e.target.value;
+    await chrome.storage.local.set({ viewMode: mode });
+
+    if (mode === "side_panel") {
+      await chrome.action.setPopup({ popup: "" });
+      if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
+        await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+      }
+    } else {
+      await chrome.action.setPopup({ popup: "popup.html" });
+      if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
+        await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+      }
+    }
+    showSettingsToast("View mode updated");
+  });
+}
+
+// Export Data
+if (exportDataBtn) {
+  exportDataBtn.addEventListener("click", async () => {
+    try {
+      const data = await chrome.storage.local.get([STORAGE_STATS, STORAGE_LIMITS]);
+      const exportObj = {
+        exportedAt: new Date().toISOString(),
+        version: "1.1.0",
+        data: data,
+      };
+
+      const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `tabmeter-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showSettingsToast("Data exported");
+    } catch (err) {
+      console.error("Export failed:", err);
+      showSettingsToast("Export failed");
+    }
+  });
+}
+
+// Clear Data
+if (clearDataBtn) {
+  clearDataBtn.addEventListener("click", async () => {
+    const ok = confirm("Delete all tracked time and site limits?\nThis cannot be undone.");
+    if (ok) {
+      await chrome.storage.local.remove([STORAGE_STATS, STORAGE_LIMITS]);
+      lastListFingerprint = null;
+      lastChartFingerprint = null;
+      loadAndPaint();
+      showSettingsToast("All data cleared");
+    }
+  });
+}
+
+// ─── Help Center Panel ───────────────────────────────────
+
+const helpPanel = document.getElementById("help-panel");
+const helpBackBtn = document.getElementById("help-back-btn");
+const helpGoSupportBtn = document.getElementById("help-go-support-btn");
+
+function openHelpPanel() {
+  openPanel(helpPanel, helpBackBtn);
+}
+
+function closeHelpPanel() {
+  closePanel(helpPanel);
+}
+
+if (helpBackBtn) {
+  helpBackBtn.addEventListener("click", closeHelpPanel);
+}
+
+// "Contact Support" CTA inside help panel
+if (helpGoSupportBtn) {
+  helpGoSupportBtn.addEventListener("click", () => {
+    closeHelpPanel();
+    // Small delay so the help panel finishes closing before support opens
+    setTimeout(() => openSupportPanel(), 340);
+  });
+}
+
+// ─── Contact Support Panel ───────────────────────────────
+
+const SUPPORT_EMAIL = "muhammadzaryabrafique@gmail.com";
+
+const supportPanel = document.getElementById("support-panel");
+const supportBackBtn = document.getElementById("support-back-btn");
+const supportSubject = document.getElementById("support-subject");
+const supportMessage = document.getElementById("support-message");
+const supportSendBtn = document.getElementById("support-send-btn");
+
+function openSupportPanel() {
+  // Reset form each time
+  if (supportSubject) supportSubject.value = "Bug Report";
+  if (supportMessage) supportMessage.value = "";
+  openPanel(supportPanel, supportBackBtn);
+}
+
+function closeSupportPanel() {
+  closePanel(supportPanel);
+}
+
+if (supportBackBtn) {
+  supportBackBtn.addEventListener("click", closeSupportPanel);
+}
+
+// Send via mailto
+if (supportSendBtn) {
+  supportSendBtn.addEventListener("click", () => {
+    const subject = supportSubject ? supportSubject.value : "TabMeter Support";
+    const body = supportMessage ? supportMessage.value.trim() : "";
+
+    if (!body) {
+      supportMessage.focus();
+      return;
+    }
+
+    const mailtoUrl =
+      `mailto:${SUPPORT_EMAIL}` +
+      `?subject=${encodeURIComponent(`[TabMeter] ${subject}`)}` +
+      `&body=${encodeURIComponent(body + "\n\n---\nSent from TabMeter v1.1.0")}`;
+
+    window.open(mailtoUrl, "_blank");
   });
 }

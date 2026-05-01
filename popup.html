@@ -166,8 +166,215 @@
     <div id="list" class="list" role="list"></div>
   </div>
   <div id="panel-chart" class="panel panel--chart is-hidden" aria-hidden="true">
+    <div class="chart-line-section">
+      <h3 class="chart-line-label">Activity Trend</h3>
+      <div id="chart-line-root" class="chart-line-root"></div>
+    </div>
     <div id="chart-root" class="chart-root"></div>
     <p id="chart-caption" class="chart-caption"></p>
+  </div>
+
+  <!-- Settings Panel (inline in popup) -->
+  <div id="settings-panel" class="settings-panel is-hidden" aria-hidden="true">
+    <div class="settings-panel-header">
+      <button type="button" id="settings-back-btn" class="settings-back-btn" aria-label="Back to home">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+          <path d="M11.25 4.5L6.75 9L11.25 13.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+            stroke-linejoin="round" />
+        </svg>
+      </button>
+      <h2 class="settings-panel-title">Settings</h2>
+    </div>
+
+    <div class="settings-panel-body">
+      <section class="settings-card">
+        <h3 class="settings-section-title">Tracking</h3>
+        <div class="settings-row">
+          <div class="settings-info">
+            <span class="settings-item-title">Idle Timeout</span>
+            <span class="settings-item-desc">Pause tracking after inactivity</span>
+          </div>
+          <div class="settings-action">
+            <select id="idle-timeout-select" class="settings-select">
+              <option value="15">15s</option>
+              <option value="30">30s</option>
+              <option value="60">1 min</option>
+              <option value="120">2 min</option>
+              <option value="300">5 min</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-card">
+        <h3 class="settings-section-title">Display</h3>
+        <div class="settings-row">
+          <div class="settings-info">
+            <span class="settings-item-title">Default View</span>
+            <span class="settings-item-desc">How the extension opens</span>
+          </div>
+          <div class="settings-action">
+            <select id="view-mode-select" class="settings-select">
+              <option value="popup">Popup</option>
+              <option value="side_panel">Side Panel</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-card">
+        <h3 class="settings-section-title">Data</h3>
+        <div class="settings-row">
+          <div class="settings-info">
+            <span class="settings-item-title">Export Data</span>
+            <span class="settings-item-desc">Download tracking history</span>
+          </div>
+          <div class="settings-action">
+            <button id="export-data-btn" class="btn btn-primary btn-pill">Export</button>
+          </div>
+        </div>
+        <div class="settings-divider"></div>
+        <div class="settings-row">
+          <div class="settings-info">
+            <span class="settings-item-title text-danger">Clear All Data</span>
+            <span class="settings-item-desc">Delete all tracked time &amp; limits</span>
+          </div>
+          <div class="settings-action">
+            <button id="clear-data-btn" class="btn btn-danger btn-pill">Delete</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="settings-toast" class="settings-toast is-hidden" aria-live="polite"></div>
+  </div>
+
+  <!-- Help Center Panel (inline in popup) -->
+  <div id="help-panel" class="settings-panel is-hidden" aria-hidden="true">
+    <div class="settings-panel-header">
+      <button type="button" id="help-back-btn" class="settings-back-btn" aria-label="Back to home">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+          <path d="M11.25 4.5L6.75 9L11.25 13.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+            stroke-linejoin="round" />
+        </svg>
+      </button>
+      <h2 class="settings-panel-title">Help Center</h2>
+    </div>
+
+    <div class="settings-panel-body">
+      <div class="help-faq-list">
+
+        <details class="help-faq-item">
+          <summary class="help-faq-question">How does TabMeter track my time?</summary>
+          <div class="help-faq-answer">
+            TabMeter records time only while a tab is actively focused and Chrome reports you as active (not idle). The timer pauses automatically when you switch tabs, minimize the browser, or go AFK.
+          </div>
+        </details>
+
+        <details class="help-faq-item">
+          <summary class="help-faq-question">Is my data sent to any server?</summary>
+          <div class="help-faq-answer">
+            No. All data is stored locally on your device using Chrome's storage API. Nothing is ever uploaded or shared externally. Your browsing habits stay completely private.
+          </div>
+        </details>
+
+        <details class="help-faq-item">
+          <summary class="help-faq-question">What is the Idle Timeout setting?</summary>
+          <div class="help-faq-answer">
+            Idle Timeout controls how long TabMeter waits before pausing the timer when you stop interacting with Chrome. The default is 60 seconds. You can adjust it in Settings → Tracking → Idle Timeout.
+          </div>
+        </details>
+
+        <details class="help-faq-item">
+          <summary class="help-faq-question">How do daily limits work?</summary>
+          <div class="help-faq-answer">
+            You can set a daily time limit for any website. Once you reach the limit, TabMeter will block the site for the rest of the day. Limits reset at midnight. Hover over a site in the list and click the timer icon to set a limit.
+          </div>
+        </details>
+
+        <details class="help-faq-item">
+          <summary class="help-faq-question">What is the Side Panel view?</summary>
+          <div class="help-faq-answer">
+            Side Panel mode opens TabMeter as a persistent sidebar inside your browser instead of a small popup. Great for keeping an eye on your stats while browsing. Switch between modes in Settings → Display.
+          </div>
+        </details>
+
+        <details class="help-faq-item">
+          <summary class="help-faq-question">How do I export or clear my data?</summary>
+          <div class="help-faq-answer">
+            Go to Settings → Data. Use "Export" to download a JSON backup of all your tracking history. Use "Delete" to permanently erase all data. Deleted data cannot be recovered.
+          </div>
+        </details>
+
+      </div>
+
+      <div class="help-contact-cta">
+        <p class="help-contact-cta-text">Didn't find what you're looking for?</p>
+        <button type="button" id="help-go-support-btn" class="btn btn-secondary btn-pill">Contact Support</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contact Support Panel (inline in popup) -->
+  <div id="support-panel" class="settings-panel is-hidden" aria-hidden="true">
+    <div class="settings-panel-header">
+      <button type="button" id="support-back-btn" class="settings-back-btn" aria-label="Back to home">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+          <path d="M11.25 4.5L6.75 9L11.25 13.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+            stroke-linejoin="round" />
+        </svg>
+      </button>
+      <h2 class="settings-panel-title">Contact Support</h2>
+    </div>
+
+    <div class="settings-panel-body">
+      <section class="settings-card">
+        <div class="support-intro">
+          <div class="support-icon-wrap">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+              <polyline points="22,6 12,13 2,6"></polyline>
+            </svg>
+          </div>
+          <p class="support-intro-text">
+            Have a bug report, feature request, or question? Send us an email and we'll get back to you as soon as possible.
+          </p>
+        </div>
+      </section>
+
+      <section class="settings-card">
+        <h3 class="settings-section-title">Your Message</h3>
+        <div class="support-form">
+          <div class="support-field">
+            <label for="support-subject" class="support-label">Subject</label>
+            <select id="support-subject" class="settings-select support-select-full">
+              <option value="Bug Report">Bug Report</option>
+              <option value="Feature Request">Feature Request</option>
+              <option value="General Question">General Question</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="support-field">
+            <label for="support-message" class="support-label">Message</label>
+            <textarea id="support-message" class="support-textarea" rows="4"
+              placeholder="Describe your issue or suggestion..."></textarea>
+          </div>
+
+          <button type="button" id="support-send-btn" class="btn btn-primary btn-pill support-send-btn">
+            Send via Email
+          </button>
+        </div>
+      </section>
+
+      <div class="support-direct-email">
+        <span class="support-direct-label">Or email us directly:</span>
+        <a href="mailto:muhammadzaryabrafique@gmail.com" class="support-email-link" id="support-email-link">
+          muhammadzaryabrafique@gmail.com
+        </a>
+      </div>
+    </div>
   </div>
 
   <div id="limit-modal" class="modal is-hidden" aria-hidden="true" role="dialog" aria-labelledby="limit-modal-title">
