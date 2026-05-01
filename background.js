@@ -58,10 +58,18 @@ async function isHostBlocked(hostname) {
 async function addSecondsForHost(hostname, seconds) {
   if (!hostname || seconds <= 0) return;
   const key = localDayKey();
+  const hour = new Date().getHours(); // 0-23
   const stats = await getStats();
   if (!stats.days) stats.days = {};
   if (!stats.days[key]) stats.days[key] = {};
   stats.days[key][hostname] = (stats.days[key][hostname] || 0) + seconds;
+
+  // Also store hourly breakdown for the Activity Trend graph
+  if (!stats.days[key].__hours__) stats.days[key].__hours__ = {};
+  if (!stats.days[key].__hours__[hour]) stats.days[key].__hours__[hour] = {};
+  stats.days[key].__hours__[hour][hostname] =
+    (stats.days[key].__hours__[hour][hostname] || 0) + seconds;
+
   await saveStats(stats);
 }
 

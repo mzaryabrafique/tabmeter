@@ -1,79 +1,58 @@
-# TabMeter: Tab Time Tracker
+<div align="center">
+  <img src="icons/icon128.png" alt="TabMeter Logo" width="128" />
+  <h1>TabMeter: Tab Time Tracker</h1>
+  <p>Track your time, privately. See exactly where your browsing time goes.</p>
 
-A Chrome/Edge extension that tracks active time spent per website hostname while a tab is focused and browser activity is detected.
+  <a href="https://chromewebstore.google.com/detail/tabmeter-tab-time-tracker/kbkmlkpkphpkkhdeapafeopphdlnpibi" target="_blank">
+    <img src="assets/btn.png" alt="Available in the Chrome Web Store" width="220" height="78" />
+  </a>
+</div>
 
-## 🚀 Features
+<br />
 
-- Tracks time on active tabs (`http` and `https` only)
-- Pauses tracking when user is idle or window is unfocused
-- Stores daily stats locally via `chrome.storage.local`
-- `popup.html` shows:
-  - Today/Week/All time breakdown
-  - Top sites list with mini bar indicators
-  - One-week stacked chart
-  - Active status message with session context
-- Privacy-friendly: all data remains on device
+TabMeter is a clean, minimal, and privacy-focused Chrome extension that automatically tracks the time you spend on different websites. No accounts, no servers, no fuss.
 
-## 📁 Repository structure
+## Screenshots
+
+| Dashboard | Privacy & Charts | Daily Limits |
+| :---: | :---: | :---: |
+| <img src="./assets/main.png" width="250" alt="Dashboard View" /> | <img src="./assets/privacy.png" width="250" alt="Privacy View" /> | <img src="./assets/time-limit.png" width="250" alt="Settings View" /> |
+
+## Features
+
+- **⏱️ Automatic Tracking**: Tracks active time spent per website. Pauses automatically when you switch tabs, minimize the browser, or step away (Idle detection).
+- **📊 Beautiful Analytics**: View your activity with smooth line charts for trends and stacked bar charts for weekly breakdowns.
+- **🎯 Daily Limits**: Set daily time limits for distracting sites. TabMeter blocks them when your time is up.
+- **🎨 Premium UI**: A clean, "MiniMax" inspired design with a white-dominant layout, rounded cards, and warm orange-red gradient accents.
+- **🛠️ Side Panel Mode**: Optionally run TabMeter in your browser's side panel for continuous visibility.
+- **⚙️ Fully Customizable**: Adjust your idle timeout, toggle view modes, or export your data as JSON.
+
+## Privacy by Design
+
+We believe your browsing habits are your own business.
+
+- **100% Local**: All data is stored securely on your device using Chrome's local storage API.
+- **No Servers**: There are no external servers, no databases, and no telemetry.
+- **No Accounts**: You don't need to sign up or log in.
+- **Hostnames Only**: TabMeter only records the root domain (e.g., `github.com`), never full URLs, search queries, or page content.
+
+## Install locally (Dev Mode)
+
+Want to poke around the code or contribute?
+
+1. Clone or download this repository.
+2. Open Chrome and navigate to `chrome://extensions`.
+3. Enable **Developer mode** in the top right.
+4. Click **Load unpacked** and select the `tab-time-tracking` folder.
+5. Pin the extension to your toolbar.
+
+## Repository Structure
 
 - `manifest.json` - Chrome extension manifest (v3)
-- `background.js` - service worker for activity tracking and timing
-- `popup.html` - UI
-- `popup.css` - styling
-- `popup.js` - UI logic, charts, visitor stats
-- `privacy.html` - privacy notice
-- `icons/` - icon resources
+- `background.js` - Service worker for activity tracking and timing
+- `popup.html` / `popup.js` / `popup.css` - Main UI and logic
+- `icons/` - Extension icons
 
-## 🛠️ How it works (key flow)
+## License
 
-1. `background.js` sets an alarm each minute and listens for:
-   - tab activation, updates, removal
-   - window focus changes
-   - idle state changes
-2. Active session state is kept in `chrome.storage.session.activeSession`
-3. `flushSession` adds elapsed seconds into `chrome.storage.local.stats.days` daily bucket
-4. `popup.js` reads `stats.days` and renders lists + charts and active session status
-
-## 🧪 Install locally (dev)
-
-1. Open browser extension page:
-   - Chrome: `chrome://extensions`
-   - Edge: `edge://extensions`
-2. Enable Developer mode
-3. Click `Load unpacked`
-4. Choose this folder (`tab-time-tracking`)
-5. Pin the extension and open popup
-
-## ⚙️ Permissions
-
-- `storage`
-- `tabs`
-- `windows`
-- `alarms`
-- `idle`
-
-## 🧾 Release notes
-
-- `1.1.0` (current): baseline stable implementation
-
-## 📌 Known behavior
-
-- Not records non-http(s) tabs (chrome://, file:// etc)
-- Idle after 60s stops current timing
-- Stats are persisted per calendar day key (`YYYY-MM-DD`)
-
-## 🛡️ Privacy
-
-- No external server calls
-- No user-identifying data stored (sites only by hostname)
-- Data is local and time-based only
-
-## 🧩 Development notes
-
-- Use 1-minute interval flush via `chrome.alarms` in background
-- Session keyed by active tabId + windowId + hostname
-- `popup.js` supports range toggles: `today`, `week`, `all` and view toggles: `list`, `chart`
-
----
-
-If you want next, I can also add a CONTRIBUTING section and minimal style guide in the README.
+[MIT License](LICENSE)

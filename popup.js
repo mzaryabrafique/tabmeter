@@ -137,6 +137,7 @@ function mergeDayBuckets(daysObj, keys) {
     const bucket = daysObj[k];
     if (!bucket || typeof bucket !== "object") continue;
     for (const [host, sec] of Object.entries(bucket)) {
+      if (host === "__hours__") continue; // skip hourly sub-bucket
       if (typeof sec !== "number" || sec <= 0) continue;
       out[host] = (out[host] || 0) + sec;
     }
@@ -241,10 +242,38 @@ async function loadDailyTotals(range) {
 
 function totalBucketSeconds(bucket) {
   let t = 0;
-  for (const v of Object.values(bucket)) {
+  for (const [k, v] of Object.entries(bucket)) {
+    if (k === "__hours__") continue; // skip hourly sub-bucket
     if (typeof v === "number" && v > 0) t += v;
   }
   return t;
+}
+
+/** Load hourly totals for today's Activity Trend line chart.
+ *  Returns 24 entries (0h–23h) with total seconds per hour. */
+async function loadHourlyTotals() {
+  const days = await loadStatsDays();
+  const todayKey = localDayKey();
+  const todayBucket = days[todayKey];
+  const hours = todayBucket?.__hours__ || {};
+  const currentHour = new Date().getHours();
+  const entries = [];
+
+  for (let h = 0; h <= currentHour; h++) {
+    const hourBucket = hours[h] || {};
+    let total = 0;
+    for (const v of Object.values(hourBucket)) {
+      if (typeof v === "number" && v > 0) total += v;
+    }
+    const ampm = h === 0 ? "12am" : h < 12 ? `${h}am` : h === 12 ? "12pm" : `${h - 12}pm`;
+    entries.push({
+      label: ampm,
+      value: total,
+      isToday: h === currentHour,
+      hour: h,
+    });
+  }
+  return entries;
 }
 
 const CHART_HUES = [28, 12, 42, 0, 345, 55, 20, 330];
@@ -497,6 +526,7 @@ function renderWeekStackedChart(svg, series) {
   const merged = {};
   for (const { bucket } of series) {
     for (const [h, sec] of Object.entries(bucket)) {
+      if (h === "__hours__") continue;
       if (typeof sec === "number" && sec > 0) merged[h] = (merged[h] || 0) + sec;
     }
   }
@@ -535,6 +565,7 @@ function renderWeekStackedChart(svg, series) {
 
   const hasOther = series.some(({ bucket }) =>
     Object.entries(bucket).some(([h, v]) => {
+      if (h === "__hours__") return false;
       if (typeof v !== "number" || v <= 0) return false;
       return !topHosts.includes(h);
     })
@@ -572,6 +603,7 @@ function renderWeekStackedChart(svg, series) {
       let sec = 0;
       if (key === "__other__") {
         for (const [h, v] of Object.entries(bucket)) {
+          if (h === "__hours__") continue;
           if (typeof v !== "number" || v <= 0) continue;
           if (!topHosts.includes(h)) sec += v;
         }
@@ -780,8 +812,8 @@ function renderLineChart(container, entries) {
     );
   });
 
-  // X-axis labels — show at most 7 evenly spaced
-  const maxLabels = 7;
+  // X-axis labels — show at most 8 evenly spaced
+  const maxLabels = 8;
   const step = Math.max(1, Math.ceil(n / maxLabels));
   points.forEach((p, i) => {
     if (n > maxLabels && i % step !== 0 && i !== n - 1) return;
@@ -806,7 +838,6 @@ const chartLineRoot = document.getElementById("chart-line-root");
 async function renderChartPanel(chartRoot, captionEl, range, aggregated) {
   let fp;
   let series = null;
-  let dailyTotals = null;
 
   if (range === "week") {
     series = await loadWeekDaySeries();
@@ -815,9 +846,14 @@ async function renderChartPanel(chartRoot, captionEl, range, aggregated) {
     fp = `${range}|${aggregatedFingerprint(aggregated)}`;
   }
 
-  // Load daily totals for the line chart
-  dailyTotals = await loadDailyTotals(range);
-  fp += `|line:${JSON.stringify(dailyTotals.map((d) => d.value))}`;
+  // Load data for the line chart: hourly for "today", daily for other ranges
+  let lineChartData = null;
+  if (range === "today") {
+    lineChartData = await loadHourlyTotals();
+  } else {
+    lineChartData = await loadDailyTotals(range);
+  }
+  fp += `|line:${JSON.stringify(lineChartData.map((d) => d.value))}`;
 
   if (fp === lastChartFingerprint && chartRoot.querySelector("svg")) {
     applyFooter(totalEl, siteCountEl, aggregated);
@@ -825,9 +861,9 @@ async function renderChartPanel(chartRoot, captionEl, range, aggregated) {
   }
   lastChartFingerprint = fp;
 
-  // Render line chart
+  // Render line chart (hourly for today, daily for other ranges)
   if (chartLineRoot) {
-    renderLineChart(chartLineRoot, dailyTotals);
+    renderLineChart(chartLineRoot, lineChartData);
   }
 
   // Render bar / stacked chart
