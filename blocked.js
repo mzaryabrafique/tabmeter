@@ -16,4 +16,17 @@ document.addEventListener("DOMContentLoaded", () => {
       window.close();
     });
   }
+
+  const removeLimitBtn = document.getElementById("remove-limit-btn");
+  if (removeLimitBtn && hostParam) {
+    removeLimitBtn.addEventListener("click", async () => {
+      const STORAGE_LIMITS = "siteLimits";
+      const { [STORAGE_LIMITS]: limits } = await chrome.storage.local.get(STORAGE_LIMITS);
+      if (limits && typeof limits === "object" && limits[hostParam]) {
+        delete limits[hostParam];
+        await chrome.storage.local.set({ [STORAGE_LIMITS]: limits });
+      }
+      window.location.replace(`https://${hostParam}`);
+    });
+  }
 });

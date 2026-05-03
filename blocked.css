@@ -68,6 +68,10 @@ body {
 
 .action-container {
   margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: stretch;
 }
 
 .btn {
@@ -96,6 +100,16 @@ body {
 .btn-primary:hover {
   opacity: 0.9;
   box-shadow: 0 6px 20px rgba(255, 59, 52, 0.5);
+}
+
+.btn-secondary {
+  background: #f4f4f5;
+  color: var(--col-text-dark);
+  box-shadow: none;
+}
+
+.btn-secondary:hover {
+  background: #e4e4e7;
 }
 
 .hint {

@@ -38,6 +38,9 @@ async function updateActiveStatus(statusEl) {
     let variant = "is-neutral";
     let targetHost = null;
 
+    window.currentActiveHost = null;
+    window.isTrackingActiveHost = false;
+
     if (!tab) {
       text = "No tab in this window.";
       variant = "is-neutral";
@@ -53,6 +56,8 @@ async function updateActiveStatus(statusEl) {
           session && session.tabId === tab.id && session.hostname === host;
 
         if (trackingThisTab) {
+          window.currentActiveHost = host;
+          window.isTrackingActiveHost = true;
           text = `Recording time on ${host}`;
           variant = "is-tracking";
         } else if (session?.hostname && session.tabId !== tab.id) {
@@ -72,12 +77,17 @@ async function updateActiveStatus(statusEl) {
     ) {
       // It's the same visual state, but we might have changed host.
       // Update the targetHost silently.
-      if (quickLimitBtn) {
-        if (targetHost) {
-          quickLimitBtn.classList.remove("is-hidden");
-          quickLimitBtn.dataset.host = targetHost;
-        } else {
-          quickLimitBtn.classList.add("is-hidden");
+      if (window.isTrackingActiveHost && activeSiteCard) {
+        if (quickLimitBtn) quickLimitBtn.classList.add("is-hidden");
+        if (activeCardLimitBtn) activeCardLimitBtn.dataset.host = window.currentActiveHost;
+      } else {
+        if (quickLimitBtn) {
+          if (targetHost) {
+            quickLimitBtn.classList.remove("is-hidden");
+            quickLimitBtn.dataset.host = targetHost;
+          } else {
+            quickLimitBtn.classList.add("is-hidden");
+          }
         }
       }
       return;
@@ -87,12 +97,22 @@ async function updateActiveStatus(statusEl) {
     statusEl.textContent = text;
     statusEl.className = `active-status ${variant}`;
     
-    if (quickLimitBtn) {
-      if (targetHost) {
-        quickLimitBtn.classList.remove("is-hidden");
-        quickLimitBtn.dataset.host = targetHost;
-      } else {
-        quickLimitBtn.classList.add("is-hidden");
+    if (window.isTrackingActiveHost && activeSiteCard) {
+      activeSiteCard.classList.remove("is-hidden");
+      statusEl.classList.add("is-hidden");
+      if (quickLimitBtn) quickLimitBtn.classList.add("is-hidden");
+      if (activeCardHost) activeCardHost.textContent = window.currentActiveHost;
+      if (activeCardLimitBtn) activeCardLimitBtn.dataset.host = window.currentActiveHost;
+    } else {
+      if (activeSiteCard) activeSiteCard.classList.add("is-hidden");
+      statusEl.classList.remove("is-hidden");
+      if (quickLimitBtn) {
+        if (targetHost) {
+          quickLimitBtn.classList.remove("is-hidden");
+          quickLimitBtn.dataset.host = targetHost;
+        } else {
+          quickLimitBtn.classList.add("is-hidden");
+        }
       }
     }
   } catch {
@@ -100,7 +120,11 @@ async function updateActiveStatus(statusEl) {
       lastStatusSnapshot = { text: "", variant: "is-neutral" };
       statusEl.textContent = "";
       statusEl.className = "active-status is-neutral";
+      if (activeSiteCard) activeSiteCard.classList.add("is-hidden");
+      statusEl.classList.remove("is-hidden");
       if (quickLimitBtn) quickLimitBtn.classList.add("is-hidden");
+      window.currentActiveHost = null;
+      window.isTrackingActiveHost = false;
     }
   }
 }
@@ -289,6 +313,7 @@ function colorOther() {
 
 /** @type {string | null} */
 let lastListFingerprint = null;
+let lastLimitsFingerprint = null;
 
 function applyFooter(totalEl, siteCountEl, aggregated) {
   const entries = sortedEntries(aggregated);
@@ -335,12 +360,13 @@ function renderList(listEl, aggregated, siteLimits = {}) {
     hostContainer.appendChild(hostEl);
 
     // Limit Badge UI
-    const limitMin = siteLimits[host];
-    if (limitMin && limitMin > 0) {
+    const limitSec = siteLimits[host];
+    if (limitSec && limitSec > 0) {
       const limitBadge = document.createElement("div");
       limitBadge.className = "limit-badge";
-      limitBadge.title = `Daily limit: ${limitMin}m`;
-      limitBadge.textContent = `${limitMin}m limit`;
+      const limitStr = formatDuration(limitSec);
+      limitBadge.title = `Daily limit: ${limitStr}`;
+      limitBadge.textContent = `${limitStr} limit`;
       hostContainer.appendChild(limitBadge);
     }
     
@@ -348,10 +374,10 @@ function renderList(listEl, aggregated, siteLimits = {}) {
     const limitBtn = document.createElement("button");
     limitBtn.type = "button";
     limitBtn.className = "limit-btn";
-    limitBtn.title = limitMin ? "Edit Limit" : "Set Limit";
+    limitBtn.title = limitSec ? "Edit Limit" : "Set Limit";
     limitBtn.innerHTML = "⏱️";
     limitBtn.dataset.host = host;
-    limitBtn.addEventListener("click", () => openLimitModal(host, limitMin));
+    limitBtn.addEventListener("click", () => openLimitModal(host, limitSec));
     hostContainer.appendChild(limitBtn);
 
     const barWrap = document.createElement("div");
@@ -375,6 +401,71 @@ function renderList(listEl, aggregated, siteLimits = {}) {
   }
   listEl.replaceChildren(frag);
 }
+function renderLimitsPanel(listEl, emptyEl, siteLimits = {}, aggregated = {}) {
+  const fp = JSON.stringify(siteLimits) + aggregatedFingerprint(aggregated);
+  if (fp === lastLimitsFingerprint && listEl.childElementCount > 0) {
+    return;
+  }
+  lastLimitsFingerprint = fp;
+
+  const hosts = Object.keys(siteLimits);
+  if (!hosts.length) {
+    listEl.classList.add("is-hidden");
+    emptyEl.classList.remove("is-hidden");
+    return;
+  }
+
+  listEl.classList.remove("is-hidden");
+  emptyEl.classList.add("is-hidden");
+
+  const frag = document.createDocumentFragment();
+  // Sort by host name or limit? Let's sort alphabetically by host.
+  hosts.sort().forEach(host => {
+    const limitSec = siteLimits[host];
+    const sec = aggregated[host] || 0;
+
+    const row = document.createElement("div");
+    row.className = "row";
+    row.setAttribute("role", "listitem");
+
+    const main = document.createElement("div");
+    main.className = "row-main";
+
+    const hostContainer = document.createElement("div");
+    hostContainer.className = "host-container";
+
+    const hostEl = document.createElement("div");
+    hostEl.className = "host";
+    hostEl.title = host;
+    hostEl.textContent = host;
+    hostContainer.appendChild(hostEl);
+
+    const limitBadge = document.createElement("div");
+    limitBadge.className = "limit-badge";
+    limitBadge.textContent = `${formatDuration(limitSec)} limit`;
+    hostContainer.appendChild(limitBadge);
+
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "limit-btn";
+    editBtn.title = "Edit Limit";
+    editBtn.innerHTML = "⏱️";
+    editBtn.addEventListener("click", () => openLimitModal(host, limitSec));
+    hostContainer.appendChild(editBtn);
+
+    main.appendChild(hostContainer);
+
+    const timeEl = document.createElement("div");
+    timeEl.className = "time";
+    timeEl.textContent = formatDuration(sec);
+
+    row.appendChild(main);
+    row.appendChild(timeEl);
+    frag.appendChild(row);
+  });
+  listEl.replaceChildren(frag);
+}
+
 
 /** @type {string | null} */
 let lastChartFingerprint = null;
@@ -905,13 +996,16 @@ function setActiveTab(buttons, activeBtn) {
 function setViewPanels(view) {
   const listPanel = document.getElementById("panel-list");
   const chartPanel = document.getElementById("panel-chart");
-  const isChart = view === "chart";
-  if (listPanel) {
-    listPanel.classList.toggle("is-hidden", isChart);
-  }
+  const limitsPanel = document.getElementById("panel-limits");
+
+  if (listPanel) listPanel.classList.toggle("is-hidden", view !== "list");
   if (chartPanel) {
-    chartPanel.classList.toggle("is-hidden", !isChart);
-    chartPanel.setAttribute("aria-hidden", isChart ? "false" : "true");
+    chartPanel.classList.toggle("is-hidden", view !== "chart");
+    chartPanel.setAttribute("aria-hidden", view === "chart" ? "false" : "true");
+  }
+  if (limitsPanel) {
+    limitsPanel.classList.toggle("is-hidden", view !== "limits");
+    limitsPanel.setAttribute("aria-hidden", view === "limits" ? "false" : "true");
   }
 }
 
@@ -920,6 +1014,15 @@ const totalEl = document.getElementById("total");
 const siteCountEl = document.getElementById("site-count");
 const statusEl = document.getElementById("active-status");
 const quickLimitBtn = document.getElementById("quick-limit-btn");
+
+const activeSiteCard = document.getElementById("active-site-card");
+const activeCardHost = document.getElementById("active-card-host");
+const activeCardTime = document.getElementById("active-card-time");
+const activeCardLimitBtn = document.getElementById("active-card-limit-btn");
+const activeCardLimitBadge = document.getElementById("active-card-limit-badge");
+
+const limitsListEl = document.getElementById("limits-list");
+const limitsEmptyEl = document.getElementById("limits-empty");
 const rangeTabButtons = [...document.querySelectorAll(".tabs .tab")];
 const viewTabButtons = [...document.querySelectorAll(".view-tab")];
 const privacyBtn = document.getElementById("open-privacy");
@@ -946,10 +1049,45 @@ async function saveSiteLimits(limits) {
 async function loadAndPaint() {
   const agg = await loadAggregated(currentRange);
   const limits = await loadSiteLimits();
+
+  // LIVE UPDATE: Add elapsed time from current session if applicable
+  if (currentRange === "today" || currentRange === "all") {
+    const { [SESSION_KEY]: session } = await chrome.storage.session.get(SESSION_KEY);
+    if (session && session.hostname && session.startedAt) {
+      const elapsed = Math.floor((Date.now() - session.startedAt) / 1000);
+      if (elapsed > 0) {
+        agg[session.hostname] = (agg[session.hostname] || 0) + elapsed;
+      }
+    }
+  }
+
+  if (window.isTrackingActiveHost && activeCardTime && window.currentActiveHost) {
+    const trackedSec = agg[window.currentActiveHost] || 0;
+    activeCardTime.textContent = formatDuration(trackedSec);
+    
+    if (activeCardLimitBadge) {
+      const limitSec = limits[window.currentActiveHost];
+      if (limitSec && limitSec > 0) {
+        activeCardLimitBadge.textContent = `${formatDuration(limitSec)} limit`;
+        activeCardLimitBadge.classList.remove("is-hidden");
+        if (activeCardLimitBtn) {
+          activeCardLimitBtn.innerHTML = '<span aria-hidden="true">⏱️</span> Edit Limit';
+        }
+      } else {
+        activeCardLimitBadge.classList.add("is-hidden");
+        if (activeCardLimitBtn) {
+          activeCardLimitBtn.innerHTML = '<span aria-hidden="true">⏱️</span> Set Limit';
+        }
+      }
+    }
+  }
+
   if (currentView === "list") {
     renderList(listEl, agg, limits);
-  } else if (chartRoot && chartCaptionEl) {
+  } else if (currentView === "chart" && chartRoot && chartCaptionEl) {
     await renderChartPanel(chartRoot, chartCaptionEl, currentRange, agg);
+  } else if (currentView === "limits" && limitsListEl && limitsEmptyEl) {
+    renderLimitsPanel(limitsListEl, limitsEmptyEl, limits, agg);
   } else {
     applyFooter(totalEl, siteCountEl, agg);
   }
@@ -1033,32 +1171,70 @@ chrome.storage.onChanged.addListener((changes, area) => {
 const limitModal = document.getElementById("limit-modal");
 const limitOverlay = document.getElementById("limit-modal-overlay");
 const limitHostName = document.getElementById("limit-host-name");
-const limitInput = document.getElementById("limit-input-minutes");
+const limitH = document.getElementById("limit-h");
+const limitM = document.getElementById("limit-m");
+const limitS = document.getElementById("limit-s");
 const limitBtnSave = document.getElementById("limit-btn-save");
 const limitBtnRemove = document.getElementById("limit-btn-remove");
 const limitBtnCancel = document.getElementById("limit-btn-cancel");
 
+// Add wheel support for time inputs with scroll prevention
+[limitH, limitM, limitS].forEach(input => {
+  input.addEventListener('wheel', (e) => {
+    // If input is focused, let the wheel change value and prevent page scroll
+    if (document.activeElement === input) {
+      e.preventDefault();
+      const step = 1;
+      const min = parseInt(input.min) || 0;
+      const max = parseInt(input.max) || 59;
+      // Hours can go higher
+      const actualMax = input.id === 'limit-h' ? 23 : max;
+      
+      let val = parseInt(input.value) || 0;
+      if (e.deltaY < 0) {
+        val = Math.min(actualMax, val + step);
+      } else {
+        val = Math.max(min, val - step);
+      }
+      input.value = val;
+    }
+  }, { passive: false });
+});
+
 let currentModalHost = null;
 
-function openLimitModal(host, currentLimit) {
+function openLimitModal(host, currentLimitSec) {
   currentModalHost = host;
   limitHostName.textContent = host;
-  if (currentLimit) {
-    limitInput.value = currentLimit;
+  if (currentLimitSec) {
+    const h = Math.floor(currentLimitSec / 3600);
+    const m = Math.floor((currentLimitSec % 3600) / 60);
+    const s = currentLimitSec % 60;
+    limitH.value = h;
+    limitM.value = m;
+    limitS.value = s;
     limitBtnRemove.style.display = "inline-flex";
   } else {
-    limitInput.value = "";
+    limitH.value = 0;
+    limitM.value = 30; // Default to 30 mins
+    limitS.value = 0;
     limitBtnRemove.style.display = "none";
   }
+  
+  // Lock body scroll
+  document.body.style.overflow = "hidden";
+  
   limitModal.classList.remove("is-hidden");
   limitModal.setAttribute("aria-hidden", "false");
-  limitInput.focus();
+  limitM.focus();
 }
 
 function closeLimitModal() {
   currentModalHost = null;
   limitModal.classList.add("is-hidden");
   limitModal.setAttribute("aria-hidden", "true");
+  // Restore body scroll
+  document.body.style.overflow = "";
 }
 
 limitOverlay.addEventListener("click", closeLimitModal);
@@ -1066,10 +1242,14 @@ limitBtnCancel.addEventListener("click", closeLimitModal);
 
 limitBtnSave.addEventListener("click", async () => {
   if (!currentModalHost) return;
-  const val = parseInt(limitInput.value, 10);
-  if (!isNaN(val) && val > 0) {
+  const h = parseInt(limitH.value, 10) || 0;
+  const m = parseInt(limitM.value, 10) || 0;
+  const s = parseInt(limitS.value, 10) || 0;
+  const totalSec = h * 3600 + m * 60 + s;
+  
+  if (totalSec > 0) {
     const lims = await loadSiteLimits();
-    lims[currentModalHost] = val;
+    lims[currentModalHost] = totalSec;
     await saveSiteLimits(lims);
   }
   closeLimitModal();
@@ -1094,9 +1274,21 @@ if (quickLimitBtn) {
   });
 }
 
+if (activeCardLimitBtn) {
+  activeCardLimitBtn.addEventListener("click", async () => {
+    const host = activeCardLimitBtn.dataset.host;
+    if (!host) return;
+    const limits = await loadSiteLimits();
+    openLimitModal(host, limits[host] || 0);
+  });
+}
+
 setViewPanels(currentView);
 attachPopupListeners();
 refreshAll();
+
+// Keep the UI updated live every second
+setInterval(refreshAll, 1000);
 
 // ─── Sidebar Logic ───────────────────────────────────────
 

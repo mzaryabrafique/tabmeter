@@ -120,6 +120,24 @@
   </aside>
   <header class="header">
     <div class="active-status-container">
+      <div id="active-site-card" class="active-site-card is-hidden">
+        <div class="active-card-header">
+          <div class="active-indicator">
+            <span class="pulse-dot"></span>
+            <span class="active-label">Recording Active</span>
+          </div>
+          <button type="button" id="active-card-limit-btn" class="active-card-limit-btn">
+            <span aria-hidden="true">⏱️</span> Set Limit
+          </button>
+        </div>
+        <div class="active-card-body">
+          <div class="active-card-host-wrapper">
+            <h2 id="active-card-host" class="active-card-host"></h2>
+            <span id="active-card-limit-badge" class="limit-badge is-hidden"></span>
+          </div>
+          <div id="active-card-time" class="active-card-time">0s</div>
+        </div>
+      </div>
       <div id="active-status" class="active-status" role="status" aria-live="polite"></div>
       <button type="button" id="quick-limit-btn" class="quick-limit-btn is-hidden">
         <span aria-hidden="true">⏱️</span> Set Limit
@@ -142,6 +160,9 @@
       </button>
       <button type="button" class="view-tab" data-view="chart" role="tab" aria-selected="false" id="view-chart">
         Graph
+      </button>
+      <button type="button" class="view-tab" data-view="limits" role="tab" aria-selected="false" id="view-limits">
+        Limits
       </button>
     </div>
   </header>
@@ -172,6 +193,13 @@
     </div>
     <div id="chart-root" class="chart-root"></div>
     <p id="chart-caption" class="chart-caption"></p>
+  </div>
+  <div id="panel-limits" class="panel panel--limits is-hidden" aria-hidden="true">
+    <div id="limits-list" class="list" role="list"></div>
+    <div id="limits-empty" class="empty-state is-hidden">
+      <div class="empty-icon">✓</div>
+      <p>No active limits.</p>
+    </div>
   </div>
 
   <!-- Settings Panel (inline in popup) -->
@@ -381,12 +409,23 @@
     <div class="modal-overlay" id="limit-modal-overlay"></div>
     <div class="modal-content">
       <h2 id="limit-modal-title" class="modal-title">Set Daily Limit for <br /><span id="limit-host-name"></span></h2>
-      <p class="modal-desc">Choose how many minutes you want to spend on this site per day. We'll block it when time is
-        up.</p>
+      <p class="modal-desc">Set the maximum time you want to spend on this site per day. We'll block access once reached.</p>
 
-      <div class="modal-input-group">
-        <input type="number" id="limit-input-minutes" class="modal-input" min="1" max="1440" placeholder="e.g. 30" />
-        <span class="modal-input-suffix">minutes</span>
+      <div class="time-picker">
+        <div class="time-picker-group">
+          <input type="number" id="limit-h" min="0" max="23" value="0" class="time-input" placeholder="00">
+          <label>Hours</label>
+        </div>
+        <div class="time-picker-sep">:</div>
+        <div class="time-picker-group">
+          <input type="number" id="limit-m" min="0" max="59" value="0" class="time-input" placeholder="00">
+          <label>Mins</label>
+        </div>
+        <div class="time-picker-sep">:</div>
+        <div class="time-picker-group">
+          <input type="number" id="limit-s" min="0" max="59" value="0" class="time-input" placeholder="00">
+          <label>Secs</label>
+        </div>
       </div>
 
       <div class="modal-actions">

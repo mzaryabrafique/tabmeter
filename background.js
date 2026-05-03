@@ -2,6 +2,8 @@ const ALARM_TICK = "tab-time-tick";
 const STORAGE_STATS = "stats";
 const SESSION_KEY = "activeSession";
 
+let blockTimeoutId = null;
+
 function localDayKey(d = new Date()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -38,21 +40,32 @@ async function saveStats(stats) {
 const STORAGE_LIMITS = "siteLimits";
 
 async function getLimits() {
-  const { [STORAGE_LIMITS]: limits } = await chrome.storage.local.get(STORAGE_LIMITS);
-  return limits && typeof limits === "object" ? limits : {};
+  const { [STORAGE_LIMITS]: limits, limitsMigrated } = await chrome.storage.local.get([STORAGE_LIMITS, "limitsMigrated"]);
+  let parsed = limits && typeof limits === "object" ? limits : {};
+
+  // Migration: Old values were in minutes, new ones are in seconds.
+  if (!limitsMigrated && Object.keys(parsed).length > 0) {
+    for (const host in parsed) {
+      if (typeof parsed[host] === "number") {
+        parsed[host] = parsed[host] * 60;
+      }
+    }
+    await chrome.storage.local.set({ [STORAGE_LIMITS]: parsed, limitsMigrated: true });
+  }
+  return parsed;
 }
 
 async function isHostBlocked(hostname) {
   if (!hostname) return false;
   const limits = await getLimits();
-  const limitMin = limits[hostname];
-  if (!limitMin || limitMin <= 0) return false;
+  const limitSec = limits[hostname];
+  if (!limitSec || limitSec <= 0) return false;
 
   const stats = await getStats();
   const key = localDayKey();
   const todaySec = stats.days?.[key]?.[hostname] || 0;
 
-  return todaySec >= limitMin * 60;
+  return todaySec >= limitSec;
 }
 
 async function addSecondsForHost(hostname, seconds) {
@@ -86,6 +99,35 @@ async function setSession(session) {
   }
 }
 
+async function scheduleLimitEnforcement(hostname, sessionTabId) {
+  if (blockTimeoutId) {
+    clearTimeout(blockTimeoutId);
+    blockTimeoutId = null;
+  }
+  if (!hostname || !sessionTabId) return;
+
+  const limits = await getLimits();
+  const limitSec = limits[hostname];
+  if (!limitSec || limitSec <= 0) return;
+
+  const stats = await getStats();
+  const key = localDayKey();
+  const todaySec = stats.days?.[key]?.[hostname] || 0;
+
+  const remainingSec = limitSec - todaySec;
+  if (remainingSec <= 0) return; // Already handled by flushSession / isHostBlocked
+
+  blockTimeoutId = setTimeout(async () => {
+    // When the exact time is up, flush immediately and block.
+    const session = await getSession();
+    if (session && session.hostname === hostname && session.tabId === sessionTabId) {
+      await flushSession({ keep: false });
+      const blockedUrl = chrome.runtime.getURL(`blocked.html?host=${encodeURIComponent(hostname)}`);
+      chrome.tabs.update(sessionTabId, { url: blockedUrl }).catch(() => {});
+    }
+  }, remainingSec * 1000);
+}
+
 /** Credit elapsed time since session.startedAt; optionally keep session with fresh startedAt */
 async function flushSession({ keep = false } = {}) {
   const session = await getSession();
@@ -106,9 +148,13 @@ async function flushSession({ keep = false } = {}) {
     if (await isHostBlocked(session.hostname)) {
        const blockedUrl = chrome.runtime.getURL(`blocked.html?host=${encodeURIComponent(session.hostname)}`);
        chrome.tabs.update(session.tabId, { url: blockedUrl }).catch(() => {});
+       if (blockTimeoutId) clearTimeout(blockTimeoutId);
+    } else {
+       await scheduleLimitEnforcement(session.hostname, session.tabId);
     }
   } else {
     await setSession(null);
+    if (blockTimeoutId) clearTimeout(blockTimeoutId);
   }
 }
 
@@ -133,6 +179,8 @@ async function startSessionFromTab(tab) {
     hostname,
     startedAt: Date.now(),
   });
+
+  await scheduleLimitEnforcement(hostname, tab.id);
 }
 
 async function syncToActiveTab() {
