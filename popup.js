@@ -1082,14 +1082,15 @@ async function loadAndPaint() {
     }
   }
 
+  // Always update footer stats to ensure live updates for "Total Tracked"
+  applyFooter(totalEl, siteCountEl, agg);
+
   if (currentView === "list") {
     renderList(listEl, agg, limits);
   } else if (currentView === "chart" && chartRoot && chartCaptionEl) {
     await renderChartPanel(chartRoot, chartCaptionEl, currentRange, agg);
   } else if (currentView === "limits" && limitsListEl && limitsEmptyEl) {
     renderLimitsPanel(limitsListEl, limitsEmptyEl, limits, agg);
-  } else {
-    applyFooter(totalEl, siteCountEl, agg);
   }
 }
 
