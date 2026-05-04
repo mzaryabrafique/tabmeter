@@ -1886,7 +1886,7 @@ async function generatePDF(aggregated, title, filename) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(...TEXT_MUTED);
-    doc.text("Private data stored locally. TabMeter by Zaryab Rafique.", 14, finalY);
+    doc.text("Private data stored locally. TabMeter by Muhammad Zaryab Rafique.", 14, finalY);
     doc.text(`Page ${i} of ${pageCount}`, 196, finalY, { align: "right" });
   }
 

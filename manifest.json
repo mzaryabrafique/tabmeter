@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TabMeter: Tab Time Tracker",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "See time spent per website while a tab is focused and you are active. Data stays on your device only.",
   "permissions": [
     "storage",
