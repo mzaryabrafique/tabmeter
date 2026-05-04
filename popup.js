@@ -997,6 +997,7 @@ function setViewPanels(view) {
   const listPanel = document.getElementById("panel-list");
   const chartPanel = document.getElementById("panel-chart");
   const limitsPanel = document.getElementById("panel-limits");
+  const reportsPanel = document.getElementById("panel-reports");
 
   if (listPanel) listPanel.classList.toggle("is-hidden", view !== "list");
   if (chartPanel) {
@@ -1006,6 +1007,10 @@ function setViewPanels(view) {
   if (limitsPanel) {
     limitsPanel.classList.toggle("is-hidden", view !== "limits");
     limitsPanel.setAttribute("aria-hidden", view === "limits" ? "false" : "true");
+  }
+  if (reportsPanel) {
+    reportsPanel.classList.toggle("is-hidden", view !== "reports");
+    reportsPanel.setAttribute("aria-hidden", view === "reports" ? "false" : "true");
   }
 }
 
@@ -1302,6 +1307,7 @@ const sidebarSidePanelBtn = document.getElementById("sidebar-sidepanel-btn");
 const sidebarSettingsBtn = document.getElementById("sidebar-settings-btn");
 const sidebarHelpBtn = document.getElementById("sidebar-help-btn");
 const sidebarSupportBtn = document.getElementById("sidebar-support-btn");
+const sidebarReportsBtn = document.getElementById("sidebar-reports-btn");
 
 function openSidebar() {
   sidebar.classList.add("is-open");
@@ -1399,7 +1405,20 @@ if (sidebarSidePanelBtn) {
 if (sidebarSettingsBtn) {
   sidebarSettingsBtn.addEventListener("click", () => {
     closeSidebar();
-    openSettingsPanel();
+    setTimeout(() => openSettingsPanel(), 340);
+  });
+}
+
+if (sidebarReportsBtn) {
+  sidebarReportsBtn.addEventListener("click", () => {
+    closeSidebar();
+    currentView = "reports";
+    const btn = document.getElementById("view-reports");
+    if (btn) {
+      setActiveTab(viewTabButtons, btn);
+      setViewPanels(currentView);
+      refreshAll();
+    }
   });
 }
 

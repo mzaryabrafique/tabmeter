@@ -1647,6 +1647,17 @@ body.sidebar-is-open {
   color: var(--col-text-muted);
   text-transform: lowercase;
 }
+/* --- Panel Reports --- */
+.panel--reports {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.no-margin {
+  margin: 0 !important;
+}
 
 .mb-10 {
   margin-bottom: 10px;
@@ -1681,4 +1692,9 @@ body.sidebar-is-open {
 
 .align-items-start {
   align-items: flex-start;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
 }

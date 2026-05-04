@@ -55,6 +55,29 @@
         </button>
       </div>
 
+      <!-- Reports -->
+      <div class="sidebar-section">
+        <div class="sidebar-section-label">Analysis</div>
+        <button type="button" class="sidebar-item" id="sidebar-reports-btn">
+          <span class="sidebar-item-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </span>
+          <span class="sidebar-item-text">Reports</span>
+          <span class="sidebar-item-arrow">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M5.25 3.5L8.75 7L5.25 10.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </svg>
+          </span>
+        </button>
+      </div>
+
       <!-- Settings -->
       <div class="sidebar-section">
         <div class="sidebar-section-label">Preferences</div>
@@ -166,6 +189,9 @@
       <button type="button" class="view-tab" data-view="limits" role="tab" aria-selected="false" id="view-limits">
         Limits
       </button>
+      <button type="button" class="view-tab" data-view="reports" role="tab" aria-selected="false" id="view-reports">
+        Reports
+      </button>
     </div>
   </header>
 
@@ -202,6 +228,36 @@
       <div class="empty-icon">✓</div>
       <p>No active limits.</p>
     </div>
+  </div>
+
+  <div id="panel-reports" class="panel panel--reports is-hidden" aria-hidden="true">
+    <section class="settings-card no-margin">
+      <h3 class="settings-section-title">PDF Reports</h3>
+      <div class="settings-row">
+        <div class="settings-info">
+          <span class="settings-item-title">Standard Reports</span>
+          <span class="settings-item-desc">Download activity for preset ranges</span>
+        </div>
+        <div class="settings-action export-grid">
+          <button id="export-pdf-today" class="btn btn-secondary btn-pill btn-sm">Today</button>
+          <button id="export-pdf-week" class="btn btn-secondary btn-pill btn-sm">7d</button>
+          <button id="export-pdf-all" class="btn btn-secondary btn-pill btn-sm">All</button>
+        </div>
+      </div>
+      <div class="settings-divider"></div>
+      <div class="settings-row flex-column align-items-start">
+        <div class="settings-info mb-10">
+          <span class="settings-item-title">Custom Range</span>
+          <span class="settings-item-desc">Select start and end dates</span>
+        </div>
+        <div class="custom-range-row">
+          <input type="date" id="export-pdf-start" class="settings-input" />
+          <span class="range-sep">to</span>
+          <input type="date" id="export-pdf-end" class="settings-input" />
+          <button id="export-pdf-custom" class="btn btn-primary btn-pill btn-sm">Export</button>
+        </div>
+      </div>
+    </section>
   </div>
 
   <!-- Settings Panel (inline in popup) -->
@@ -248,34 +304,6 @@
               <option value="popup">Popup</option>
               <option value="side_panel">Side Panel</option>
             </select>
-          </div>
-        </div>
-      </section>
-
-      <section class="settings-card">
-        <h3 class="settings-section-title">PDF Reports</h3>
-        <div class="settings-row">
-          <div class="settings-info">
-            <span class="settings-item-title">Standard Reports</span>
-            <span class="settings-item-desc">Download activity for preset ranges</span>
-          </div>
-          <div class="settings-action export-grid">
-            <button id="export-pdf-today" class="btn btn-secondary btn-pill btn-sm">Today</button>
-            <button id="export-pdf-week" class="btn btn-secondary btn-pill btn-sm">7d</button>
-            <button id="export-pdf-all" class="btn btn-secondary btn-pill btn-sm">All</button>
-          </div>
-        </div>
-        <div class="settings-divider"></div>
-        <div class="settings-row flex-column align-items-start">
-          <div class="settings-info mb-10">
-            <span class="settings-item-title">Custom Range</span>
-            <span class="settings-item-desc">Select start and end dates</span>
-          </div>
-          <div class="custom-range-row">
-            <input type="date" id="export-pdf-start" class="settings-input" />
-            <span class="range-sep">to</span>
-            <input type="date" id="export-pdf-end" class="settings-input" />
-            <button id="export-pdf-custom" class="btn btn-primary btn-pill btn-sm">Export</button>
           </div>
         </div>
       </section>
