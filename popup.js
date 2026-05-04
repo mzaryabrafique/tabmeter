@@ -1732,7 +1732,7 @@ async function handlePdfExport(range, startStr, endStr) {
       return;
     }
 
-    generatePDF(aggregated, title, filename);
+    generatePDF(aggregated, title, filename, range, days);
     showSettingsToast("PDF Exported");
   } catch (err) {
     console.error("PDF Export failed:", err);
@@ -1758,8 +1758,8 @@ async function getImageBase64(url) {
   });
 }
 
-/** Generate PDF using jsPDF and autoTable with MiniMax Design */
-async function generatePDF(aggregated, title, filename) {
+/** Generate PDF using jsPDF and autoTable with MiniMax Design and Visual Charts */
+async function generatePDF(aggregated, title, filename, range = "today", allDays = {}) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   
@@ -1830,6 +1830,128 @@ async function generatePDF(aggregated, title, filename) {
   doc.setFontSize(18);
   doc.setTextColor(...TEXT_DARK);
   doc.text(entries.length.toString(), 130, 62);
+  
+  // --- Visual Analytics Section ---
+  let nextY = 78;
+
+  // 1. Activity Trend (Line Chart)
+  let lineData = [];
+  if (range === "today") {
+    // We need to fetch hourly data for today
+    const hours = allDays[localDayKey()]?.__hours__ || {};
+    const currentHour = new Date().getHours();
+    for (let h = 0; h <= currentHour; h++) {
+      const hb = hours[h] || {};
+      const val = Object.values(hb).reduce((s,v)=>s+(typeof v==='number'?v:0), 0);
+      const ampm = h === 0 ? "12am" : h < 12 ? `${h}am` : h === 12 ? "12pm" : `${h - 12}pm`;
+      lineData.push({ label: ampm, value: val });
+    }
+  } else {
+    // For week/all, use daily totals (capped at 14 for PDF space)
+    const keys = Object.keys(allDays).sort();
+    const relevantKeys = range === 'week' ? 
+      Array.from({length:7}, (_,i)=>localDayKey(addDays(new Date(), -6+i))) :
+      keys.slice(-14);
+    
+    lineData = relevantKeys.map(k => {
+      const bucket = allDays[k] || {};
+      const val = Object.entries(bucket).reduce((s,[key,v]) => key==='__hours__'?s:s+(typeof v==='number'?v:0), 0);
+      const dt = new Date(k);
+      const lbl = isNaN(dt) ? k : `${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dt.getDay()]} ${dt.getDate()}`;
+      return { label: lbl, value: val };
+    });
+  }
+
+  if (lineData.length > 0 && lineData.some(d => d.value > 0)) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...TEXT_DARK);
+    doc.text("ACTIVITY TREND", 14, nextY);
+    nextY += 5;
+
+    const chartW = 182;
+    const chartH = 30;
+    const startX = 14;
+    const startY = nextY;
+    
+    const maxVal = Math.max(...lineData.map(d => d.value)) || 1;
+    
+    // Draw Grid & Labels
+    doc.setDrawColor(240, 240, 245);
+    doc.setLineWidth(0.1);
+    for(let i=0; i<=3; i++) {
+      const gy = startY + (chartH * i / 3);
+      doc.line(startX, gy, startX + chartW, gy);
+    }
+
+    // Draw Line
+    doc.setDrawColor(...BRAND_RED);
+    doc.setLineWidth(0.6);
+    const points = lineData.map((d, i) => ({
+      x: startX + (i * chartW / (lineData.length - 1 || 1)),
+      y: startY + chartH - (d.value * chartH / maxVal)
+    }));
+
+    for(let i=0; i<points.length - 1; i++) {
+      doc.line(points[i].x, points[i].y, points[i+1].x, points[i+1].y);
+    }
+    
+    // X-Axis Labels (sampled)
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(...TEXT_MUTED);
+    const skip = Math.ceil(lineData.length / 7);
+    lineData.forEach((d, i) => {
+      if (i % skip === 0 || i === lineData.length - 1) {
+        const lx = startX + (i * chartW / (lineData.length - 1 || 1));
+        doc.text(d.label, lx, startY + chartH + 4, { align: "center" });
+      }
+    });
+
+    nextY += chartH + 12;
+  }
+
+  // 2. Usage Distribution (Bar Chart)
+  const topEntries = entries.slice(0, 5);
+  if (topEntries.length > 0) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...TEXT_DARK);
+    doc.text("TOP WEBSITES DISTRIBUTION", 14, nextY);
+    nextY += 6;
+
+    const barStartX = 55;
+    const barMaxWidth = 130;
+    const barHeight = 6;
+    const barGap = 4;
+    const maxBarVal = topEntries[0][1];
+
+    topEntries.forEach(([host, sec], i) => {
+      const curY = nextY + (i * (barHeight + barGap));
+      
+      // Label
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(...TEXT_DARK);
+      const displayHost = host.length > 22 ? host.substring(0, 20) + "..." : host;
+      doc.text(displayHost, 14, curY + 4.5);
+
+      // Bar
+      const barW = (sec / maxBarVal) * barMaxWidth;
+      doc.setFillColor(245, 245, 247);
+      doc.roundedRect(barStartX, curY, barMaxWidth, barHeight, 1, 1, 'F');
+      
+      doc.setFillColor(...BRAND_RED);
+      doc.roundedRect(barStartX, curY, Math.max(1, barW), barHeight, 1, 1, 'F');
+
+      // Value
+      doc.setTextColor(...TEXT_MUTED);
+      doc.setFontSize(7);
+      doc.text(formatDuration(sec), barStartX + barMaxWidth + 2, curY + 4.5);
+    });
+
+    nextY += (topEntries.length * (barHeight + barGap)) + 10;
+  }
 
   // --- Table ---
   const tableData = entries.map(([host, sec], index) => [
@@ -1840,7 +1962,7 @@ async function generatePDF(aggregated, title, filename) {
   ]);
 
   doc.autoTable({
-    startY: 80,
+    startY: nextY,
     head: [["#", "WEBSITE", "DURATION", "SHARE"]],
     body: tableData,
     theme: 'striped',
