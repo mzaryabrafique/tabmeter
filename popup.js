@@ -1412,13 +1412,7 @@ if (sidebarSettingsBtn) {
 if (sidebarReportsBtn) {
   sidebarReportsBtn.addEventListener("click", () => {
     closeSidebar();
-    currentView = "reports";
-    const btn = document.getElementById("view-reports");
-    if (btn) {
-      setActiveTab(viewTabButtons, btn);
-      setViewPanels(currentView);
-      refreshAll();
-    }
+    setTimeout(() => openReportsOverlayPanel(), 340);
   });
 }
 
@@ -1494,6 +1488,8 @@ document.addEventListener("keydown", (e) => {
     closeHelpPanel();
   } else if (supportPanel && !supportPanel.classList.contains("is-hidden")) {
     closeSupportPanel();
+  } else if (reportsOverlayPanel && !reportsOverlayPanel.classList.contains("is-hidden")) {
+    closeReportsOverlayPanel();
   }
 });
 
@@ -1663,6 +1659,23 @@ if (supportSendBtn) {
 
     window.open(mailtoUrl, "_blank");
   });
+}
+
+// ─── PDF Reports Overlay Panel ───────────────────────────────
+
+const reportsOverlayPanel = document.getElementById("reports-panel");
+const reportsOverlayBackBtn = document.getElementById("reports-back-btn");
+
+function openReportsOverlayPanel() {
+  openPanel(reportsOverlayPanel, reportsOverlayBackBtn);
+}
+
+function closeReportsOverlayPanel() {
+  closePanel(reportsOverlayPanel);
+}
+
+if (reportsOverlayBackBtn) {
+  reportsOverlayBackBtn.addEventListener("click", closeReportsOverlayPanel);
 }
 
 // ─── PDF Export Logic ────────────────────────────────────
@@ -1887,5 +1900,22 @@ if (btnPdfAll) btnPdfAll.addEventListener("click", () => handlePdfExport("all"))
 if (btnPdfCustom) {
   btnPdfCustom.addEventListener("click", () => {
     handlePdfExport("custom", inputPdfStart.value, inputPdfEnd.value);
+  });
+}
+
+// Overlay PDF Export Listeners
+const overlayBtnPdfToday = document.getElementById("overlay-export-pdf-today");
+const overlayBtnPdfWeek = document.getElementById("overlay-export-pdf-week");
+const overlayBtnPdfAll = document.getElementById("overlay-export-pdf-all");
+const overlayBtnPdfCustom = document.getElementById("overlay-export-pdf-custom");
+const overlayInputPdfStart = document.getElementById("overlay-export-pdf-start");
+const overlayInputPdfEnd = document.getElementById("overlay-export-pdf-end");
+
+if (overlayBtnPdfToday) overlayBtnPdfToday.addEventListener("click", () => handlePdfExport("today"));
+if (overlayBtnPdfWeek) overlayBtnPdfWeek.addEventListener("click", () => handlePdfExport("week"));
+if (overlayBtnPdfAll) overlayBtnPdfAll.addEventListener("click", () => handlePdfExport("all"));
+if (overlayBtnPdfCustom) {
+  overlayBtnPdfCustom.addEventListener("click", () => {
+    handlePdfExport("custom", overlayInputPdfStart.value, overlayInputPdfEnd.value);
   });
 }

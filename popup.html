@@ -463,6 +463,49 @@
     </div>
   </div>
 
+  <!-- Reports Panel (overlay) -->
+  <div id="reports-panel" class="settings-panel is-hidden" aria-hidden="true">
+    <div class="settings-panel-header">
+      <button type="button" id="reports-back-btn" class="settings-back-btn" aria-label="Back to home">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+          <path d="M11.25 4.5L6.75 9L11.25 13.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+            stroke-linejoin="round" />
+        </svg>
+      </button>
+      <h2 class="settings-panel-title">PDF Reports</h2>
+    </div>
+
+    <div class="settings-panel-body">
+      <section class="settings-card no-margin">
+        <h3 class="settings-section-title">Standard Reports</h3>
+        <div class="settings-row">
+          <div class="settings-info">
+            <span class="settings-item-title">Quick Export</span>
+            <span class="settings-item-desc">Download activity for preset ranges</span>
+          </div>
+          <div class="settings-action export-grid">
+            <button id="overlay-export-pdf-today" class="btn btn-secondary btn-pill btn-sm">Today</button>
+            <button id="overlay-export-pdf-week" class="btn btn-secondary btn-pill btn-sm">7d</button>
+            <button id="overlay-export-pdf-all" class="btn btn-secondary btn-pill btn-sm">All</button>
+          </div>
+        </div>
+        <div class="settings-divider"></div>
+        <div class="settings-row flex-column align-items-start">
+          <div class="settings-info mb-10">
+            <span class="settings-item-title">Custom Range</span>
+            <span class="settings-item-desc">Select start and end dates</span>
+          </div>
+          <div class="custom-range-row">
+            <input type="date" id="overlay-export-pdf-start" class="settings-input" />
+            <span class="range-sep">to</span>
+            <input type="date" id="overlay-export-pdf-end" class="settings-input" />
+            <button id="overlay-export-pdf-custom" class="btn btn-primary btn-pill btn-sm">Export</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
   <div id="limit-modal" class="modal is-hidden" aria-hidden="true" role="dialog" aria-labelledby="limit-modal-title">
     <div class="modal-overlay" id="limit-modal-overlay"></div>
     <div class="modal-content">
