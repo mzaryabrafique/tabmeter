@@ -6,6 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tab Time Tracker</title>
   <link rel="stylesheet" href="popup.css" />
+  <script src="lib/jspdf.umd.min.js"></script>
+  <script src="lib/jspdf.plugin.autotable.min.js"></script>
 </head>
 
 <body>
@@ -246,6 +248,34 @@
               <option value="popup">Popup</option>
               <option value="side_panel">Side Panel</option>
             </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-card">
+        <h3 class="settings-section-title">PDF Reports</h3>
+        <div class="settings-row">
+          <div class="settings-info">
+            <span class="settings-item-title">Standard Reports</span>
+            <span class="settings-item-desc">Download activity for preset ranges</span>
+          </div>
+          <div class="settings-action export-grid">
+            <button id="export-pdf-today" class="btn btn-secondary btn-pill btn-sm">Today</button>
+            <button id="export-pdf-week" class="btn btn-secondary btn-pill btn-sm">7d</button>
+            <button id="export-pdf-all" class="btn btn-secondary btn-pill btn-sm">All</button>
+          </div>
+        </div>
+        <div class="settings-divider"></div>
+        <div class="settings-row flex-column align-items-start">
+          <div class="settings-info mb-10">
+            <span class="settings-item-title">Custom Range</span>
+            <span class="settings-item-desc">Select start and end dates</span>
+          </div>
+          <div class="custom-range-row">
+            <input type="date" id="export-pdf-start" class="settings-input" />
+            <span class="range-sep">to</span>
+            <input type="date" id="export-pdf-end" class="settings-input" />
+            <button id="export-pdf-custom" class="btn btn-primary btn-pill btn-sm">Export</button>
           </div>
         </div>
       </section>

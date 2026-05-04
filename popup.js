@@ -1645,3 +1645,228 @@ if (supportSendBtn) {
     window.open(mailtoUrl, "_blank");
   });
 }
+
+// ─── PDF Export Logic ────────────────────────────────────
+
+const btnPdfToday = document.getElementById("export-pdf-today");
+const btnPdfWeek = document.getElementById("export-pdf-week");
+const btnPdfAll = document.getElementById("export-pdf-all");
+const btnPdfCustom = document.getElementById("export-pdf-custom");
+const inputPdfStart = document.getElementById("export-pdf-start");
+const inputPdfEnd = document.getElementById("export-pdf-end");
+
+/** Helper to filter data by range and generate PDF */
+async function handlePdfExport(range, startStr, endStr) {
+  try {
+    const days = await loadStatsDays();
+    let aggregated = {};
+    let title = "Time Tracking Report";
+    let filename = "tabmeter-report";
+    const today = localDayKey();
+
+    if (range === "today") {
+      aggregated = mergeDayBuckets(days, [today]);
+      title = `Daily Report: ${today}`;
+      filename = `tabmeter-daily-${today}`;
+    } else if (range === "week") {
+      const keys = [];
+      for (let i = 0; i < 7; i++) {
+        keys.push(localDayKey(addDays(new Date(), -i)));
+      }
+      aggregated = mergeDayBuckets(days, keys);
+      title = "Weekly Report (Last 7 Days)";
+      filename = `tabmeter-weekly-${today}`;
+    } else if (range === "all") {
+      aggregated = mergeDayBuckets(days, Object.keys(days));
+      title = "All-Time Activity Report";
+      filename = `tabmeter-all-time-${today}`;
+    } else if (range === "custom") {
+      if (!startStr || !endStr) {
+        showSettingsToast("Please select both start and end dates");
+        return;
+      }
+      const keys = Object.keys(days).filter(k => k >= startStr && k <= endStr);
+      if (keys.length === 0) {
+        showSettingsToast("No data found for this range");
+        return;
+      }
+      aggregated = mergeDayBuckets(days, keys);
+      title = `Custom Report: ${startStr} to ${endStr}`;
+      filename = `tabmeter-custom-${startStr}-to-${endStr}`;
+    }
+
+    if (Object.keys(aggregated).length === 0) {
+      showSettingsToast("No data to export for this range");
+      return;
+    }
+
+    generatePDF(aggregated, title, filename);
+    showSettingsToast("PDF Exported");
+  } catch (err) {
+    console.error("PDF Export failed:", err);
+    showSettingsToast("PDF Export failed");
+  }
+}
+
+/** Helper to get image as base64 */
+async function getImageBase64(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+/** Generate PDF using jsPDF and autoTable with MiniMax Design */
+async function generatePDF(aggregated, title, filename) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  
+  const entries = sortedEntries(aggregated);
+  const totalSec = entries.reduce((s, [, v]) => s + v, 0);
+
+  // --- Colors & Branding ---
+  const BRAND_RED = [255, 59, 52];     // #ff3b34
+  const TEXT_DARK = [24, 24, 27];      // #18181b
+  const TEXT_MUTED = [142, 142, 147];  // #8e8e93
+  const BG_STRIPE = [252, 252, 253];   // Very subtle stripe
+  const CHARCOAL = [24, 30, 37];       // Deep charcoal for header
+
+  // --- Header ---
+  // Accent Bar
+  doc.setFillColor(...BRAND_RED);
+  doc.rect(0, 0, 210, 4, 'F'); // Thinner accent bar at the very top
+
+  // Logo & Title
+  const logoData = await getImageBase64("assets/logo.png");
+  if (logoData) {
+    doc.addImage(logoData, 'PNG', 14, 18, 12, 12);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.setTextColor(...TEXT_DARK);
+    doc.text("TabMeter: Tab Time Tracker", 28, 24);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(...TEXT_MUTED);
+    doc.text("Track your time, privately", 28, 30);
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.setTextColor(...TEXT_DARK);
+    doc.text("TabMeter: Tab Time Tracker", 14, 24);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(...TEXT_MUTED);
+    doc.text("Track your time, privately", 14, 30);
+  }
+  
+  // Right Side Info
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...TEXT_MUTED);
+  doc.text(`Range: ${title}`, 196, 24, { align: "right" });
+  doc.text(`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, 196, 30, { align: "right" });
+
+  // --- Summary Card ---
+  doc.setFillColor(250, 250, 251);
+  doc.roundedRect(14, 40, 182, 28, 4, 4, 'F');
+  
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...TEXT_MUTED);
+  doc.text("TOTAL TRACKED TIME", 24, 52);
+  
+  doc.setFontSize(18);
+  doc.setTextColor(...BRAND_RED);
+  doc.text(formatDuration(totalSec), 24, 62);
+  
+  doc.setFontSize(9);
+  doc.setTextColor(...TEXT_MUTED);
+  doc.text("SITES VISITED", 130, 52);
+  
+  doc.setFontSize(18);
+  doc.setTextColor(...TEXT_DARK);
+  doc.text(entries.length.toString(), 130, 62);
+
+  // --- Table ---
+  const tableData = entries.map(([host, sec], index) => [
+    (index + 1).toString().padStart(2, '0'),
+    host,
+    formatDuration(sec),
+    ((sec / totalSec) * 100).toFixed(1) + "%"
+  ]);
+
+  doc.autoTable({
+    startY: 80,
+    head: [["#", "WEBSITE", "DURATION", "SHARE"]],
+    body: tableData,
+    theme: 'striped',
+    headStyles: { 
+      fillColor: CHARCOAL, 
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+      cellPadding: 4,
+      halign: 'left'
+    },
+    bodyStyles: {
+      fontSize: 9,
+      textColor: [60, 60, 67],
+      cellPadding: 4
+    },
+    alternateRowStyles: { 
+      fillColor: BG_STRIPE 
+    },
+    columnStyles: {
+      0: { cellWidth: 12 },
+      1: { cellWidth: 'auto' },
+      2: { cellWidth: 35, halign: 'left', fontStyle: 'bold', textColor: TEXT_DARK },
+      3: { cellWidth: 25, halign: 'right' }
+    },
+    margin: { left: 14, right: 14 },
+    styles: {
+      overflow: 'ellipsize',
+      cellWidth: 'wrap'
+    }
+  });
+
+  // --- Footer ---
+  const pageCount = doc.internal.getNumberOfPages();
+  for(let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    const finalY = 285;
+    
+    doc.setDrawColor(235, 235, 240);
+    doc.setLineWidth(0.1);
+    doc.line(14, finalY - 5, 196, finalY - 5);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...TEXT_MUTED);
+    doc.text("Private data stored locally. TabMeter by Zaryab Rafique.", 14, finalY);
+    doc.text(`Page ${i} of ${pageCount}`, 196, finalY, { align: "right" });
+  }
+
+  doc.save(`${filename}.pdf`);
+}
+
+// Event Listeners
+if (btnPdfToday) btnPdfToday.addEventListener("click", () => handlePdfExport("today"));
+if (btnPdfWeek) btnPdfWeek.addEventListener("click", () => handlePdfExport("week"));
+if (btnPdfAll) btnPdfAll.addEventListener("click", () => handlePdfExport("all"));
+if (btnPdfCustom) {
+  btnPdfCustom.addEventListener("click", () => {
+    handlePdfExport("custom", inputPdfStart.value, inputPdfEnd.value);
+  });
+}

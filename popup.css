@@ -1628,3 +1628,57 @@ body.sidebar-is-open {
   color: var(--color-primary-500);
   text-decoration-color: var(--color-primary-500);
 }
+/* --- PDF Export Styles --- */
+.export-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.custom-range-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.range-sep {
+  font-size: 11px;
+  color: var(--col-text-muted);
+  text-transform: lowercase;
+}
+
+.mb-10 {
+  margin-bottom: 10px;
+}
+
+.settings-input {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-gray);
+  font-family: "DM Sans", sans-serif;
+  font-size: 12px;
+  color: var(--col-text-dark);
+  background: var(--col-bg13);
+  min-width: 0;
+}
+
+.settings-input:focus {
+  outline: none;
+  border-color: var(--color-primary-500);
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 11px;
+}
+
+/* --- Utility Classes --- */
+.flex-column {
+  flex-direction: column;
+}
+
+.align-items-start {
+  align-items: flex-start;
+}
