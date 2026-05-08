@@ -831,8 +831,8 @@ function renderLineChart(container, entries) {
       })
     );
 
-    // Y-axis labels (skip 0 at bottom for cleanliness)
-    if (i < gridCount) {
+    // Y-axis labels
+    if (true) {
       const lab = elSvg("text", {
         x: padL - 6,
         y: y + 3.5,
@@ -1882,6 +1882,13 @@ async function generatePDF(aggregated, title, filename, range = "today", allDays
     for(let i=0; i<=3; i++) {
       const gy = startY + (chartH * i / 3);
       doc.line(startX, gy, startX + chartW, gy);
+
+      // Y-axis Labels (Time track vertically)
+      const val = maxVal * (1 - i / 3);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6);
+      doc.setTextColor(...TEXT_MUTED);
+      doc.text(formatAxisDuration(val), startX - 2, gy + 1, { align: "right" });
     }
 
     // Draw Line
