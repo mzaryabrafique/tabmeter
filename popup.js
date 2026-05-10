@@ -998,6 +998,7 @@ function setViewPanels(view) {
   const chartPanel = document.getElementById("panel-chart");
   const limitsPanel = document.getElementById("panel-limits");
   const reportsPanel = document.getElementById("panel-reports");
+  const pulsePanel = document.getElementById("panel-pulse");
 
   if (listPanel) listPanel.classList.toggle("is-hidden", view !== "list");
   if (chartPanel) {
@@ -1011,6 +1012,10 @@ function setViewPanels(view) {
   if (reportsPanel) {
     reportsPanel.classList.toggle("is-hidden", view !== "reports");
     reportsPanel.setAttribute("aria-hidden", view === "reports" ? "false" : "true");
+  }
+  if (pulsePanel) {
+    pulsePanel.classList.toggle("is-hidden", view !== "pulse");
+    pulsePanel.setAttribute("aria-hidden", view === "pulse" ? "false" : "true");
   }
 }
 
@@ -1096,6 +1101,8 @@ async function loadAndPaint() {
     await renderChartPanel(chartRoot, chartCaptionEl, currentRange, agg);
   } else if (currentView === "limits" && limitsListEl && limitsEmptyEl) {
     renderLimitsPanel(limitsListEl, limitsEmptyEl, limits, agg);
+  } else if (currentView === "pulse") {
+    await renderPulsePanel(agg);
   }
 }
 
@@ -1810,115 +1817,84 @@ async function generatePDF(aggregated, title, filename, range = "today", allDays
   doc.text(`Range: ${title}`, 196, 24, { align: "right" });
   doc.text(`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, 196, 30, { align: "right" });
 
+  const categories = await ensureDefaultCategories();
+  const { score, productiveTime, neutralTime, distractingTime } = calculateProductivityScore(aggregated, categories);
+
   // --- Summary Card ---
   doc.setFillColor(250, 250, 251);
-  doc.roundedRect(14, 40, 182, 28, 4, 4, 'F');
+  doc.roundedRect(14, 40, 182, 52, 4, 4, 'F');
   
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(...TEXT_MUTED);
   doc.text("TOTAL TRACKED TIME", 24, 52);
+  doc.text("PRODUCTIVITY SCORE", 84, 52);
+  doc.text("SITES VISITED", 144, 52);
   
   doc.setFontSize(18);
   doc.setTextColor(...BRAND_RED);
   doc.text(formatDuration(totalSec), 24, 62);
   
-  doc.setFontSize(9);
-  doc.setTextColor(...TEXT_MUTED);
-  doc.text("SITES VISITED", 130, 52);
+  if (score >= 65) doc.setTextColor(16, 185, 129);
+  else if (score >= 35) doc.setTextColor(245, 158, 11);
+  else doc.setTextColor(244, 63, 94);
+  doc.text(`${score}`, 84, 62);
   
-  doc.setFontSize(18);
   doc.setTextColor(...TEXT_DARK);
-  doc.text(entries.length.toString(), 130, 62);
-  
-  // --- Visual Analytics Section ---
-  let nextY = 78;
+  doc.text(entries.length.toString(), 144, 62);
 
-  // 1. Activity Trend (Line Chart)
-  let lineData = [];
-  if (range === "today") {
-    // We need to fetch hourly data for today
-    const hours = allDays[localDayKey()]?.__hours__ || {};
-    const currentHour = new Date().getHours();
-    for (let h = 0; h <= currentHour; h++) {
-      const hb = hours[h] || {};
-      const val = Object.values(hb).reduce((s,v)=>s+(typeof v==='number'?v:0), 0);
-      const ampm = h === 0 ? "12am" : h < 12 ? `${h}am` : h === 12 ? "12pm" : `${h - 12}pm`;
-      lineData.push({ label: ampm, value: val });
+  // Visual Breakdown Bar (Rounded Segments)
+  if (totalSec > 0) {
+    const pPct = productiveTime / totalSec;
+    const nPct = neutralTime / totalSec;
+    const dPct = distractingTime / totalSec;
+    const barX = 24, barY = 69, barWTotal = 162, barH = 3.5;
+    
+    let currentX = barX;
+    if (pPct > 0) {
+      const w = Math.max(2, (barWTotal * pPct) - 1);
+      doc.setFillColor(16, 185, 129);
+      doc.roundedRect(currentX, barY, w, barH, 1.5, 1.5, 'F');
+      currentX += w + 1;
     }
-  } else {
-    // For week/all, use daily totals (capped at 14 for PDF space)
-    const keys = Object.keys(allDays).sort();
-    const relevantKeys = range === 'week' ? 
-      Array.from({length:7}, (_,i)=>localDayKey(addDays(new Date(), -6+i))) :
-      keys.slice(-14);
-    
-    lineData = relevantKeys.map(k => {
-      const bucket = allDays[k] || {};
-      const val = Object.entries(bucket).reduce((s,[key,v]) => key==='__hours__'?s:s+(typeof v==='number'?v:0), 0);
-      const dt = new Date(k);
-      const lbl = isNaN(dt) ? k : `${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dt.getDay()]} ${dt.getDate()}`;
-      return { label: lbl, value: val };
-    });
-  }
-
-  if (lineData.length > 0 && lineData.some(d => d.value > 0)) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(...TEXT_DARK);
-    doc.text("ACTIVITY TREND", 14, nextY);
-    nextY += 5;
-
-    const chartW = 182;
-    const chartH = 30;
-    const startX = 14;
-    const startY = nextY;
-    
-    const maxVal = Math.max(...lineData.map(d => d.value)) || 1;
-    
-    // Draw Grid & Labels
-    doc.setDrawColor(240, 240, 245);
-    doc.setLineWidth(0.1);
-    for(let i=0; i<=3; i++) {
-      const gy = startY + (chartH * i / 3);
-      doc.line(startX, gy, startX + chartW, gy);
-
-      // Y-axis Labels (Time track vertically)
-      const val = maxVal * (1 - i / 3);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(6);
-      doc.setTextColor(...TEXT_MUTED);
-      doc.text(formatAxisDuration(val), startX - 2, gy + 1, { align: "right" });
+    if (nPct > 0) {
+      const w = Math.max(2, (barWTotal * nPct) - 1);
+      doc.setFillColor(142, 142, 147);
+      doc.roundedRect(currentX, barY, w, barH, 1.5, 1.5, 'F');
+      currentX += w + 1;
     }
-
-    // Draw Line
-    doc.setDrawColor(...BRAND_RED);
-    doc.setLineWidth(0.6);
-    const points = lineData.map((d, i) => ({
-      x: startX + (i * chartW / (lineData.length - 1 || 1)),
-      y: startY + chartH - (d.value * chartH / maxVal)
-    }));
-
-    for(let i=0; i<points.length - 1; i++) {
-      doc.line(points[i].x, points[i].y, points[i+1].x, points[i+1].y);
-    }
-    
-    // X-Axis Labels (sampled)
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.setTextColor(...TEXT_MUTED);
-    const skip = Math.ceil(lineData.length / 7);
-    lineData.forEach((d, i) => {
-      if (i % skip === 0 || i === lineData.length - 1) {
-        const lx = startX + (i * chartW / (lineData.length - 1 || 1));
-        doc.text(d.label, lx, startY + chartH + 4, { align: "center" });
+    if (dPct > 0) {
+      const w = barX + barWTotal - currentX;
+      if (w > 0) {
+        doc.setFillColor(244, 63, 94);
+        doc.roundedRect(currentX, barY, w, barH, 1.5, 1.5, 'F');
       }
-    });
-
-    nextY += chartH + 12;
+    }
   }
 
-  // 2. Usage Distribution (Bar Chart)
+  // Breakdown text
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(16, 185, 129);
+  doc.text(`Productive: ${formatDuration(productiveTime)}`, 24, 79);
+  
+  doc.setTextColor(142, 142, 147);
+  doc.text(`Neutral: ${formatDuration(neutralTime)}`, 84, 79);
+  
+  doc.setTextColor(244, 63, 94);
+  doc.text(`Distracting: ${formatDuration(distractingTime)}`, 144, 79);
+
+  // Insight Text
+  const insight = getScoreInsight(score, totalSec);
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 100, 105);
+  doc.text(`Insight: ${insight}`, 24, 87);
+
+  // --- Visual Analytics Section ---
+  let nextY = 100;
+
+  // 1. Usage Distribution (Bar Chart)
   const topEntries = entries.slice(0, 5);
   if (topEntries.length > 0) {
     doc.setFont("helvetica", "bold");
@@ -1957,20 +1933,124 @@ async function generatePDF(aggregated, title, filename, range = "today", allDays
       doc.text(formatDuration(sec), barStartX + barMaxWidth + 2, curY + 4.5);
     });
 
-    nextY += (topEntries.length * (barHeight + barGap)) + 10;
+    nextY += (topEntries.length * (barHeight + barGap)) + 12;
+  }
+
+  // 2. Activity Trend (Line Chart)
+  let lineData = [];
+  if (range === "today") {
+    // We need to fetch hourly data for today
+    const hours = allDays[localDayKey()]?.__hours__ || {};
+    const currentHour = new Date().getHours();
+    for (let h = 0; h <= currentHour; h++) {
+      const hb = hours[h] || {};
+      const val = Object.values(hb).reduce((s,v)=>s+(typeof v==='number'?v:0), 0);
+      const ampm = h === 0 ? "12am" : h < 12 ? `${h}am` : h === 12 ? "12pm" : `${h - 12}pm`;
+      lineData.push({ label: ampm, value: val });
+    }
+  } else {
+    // For week/all, use daily totals (capped at 14 for PDF space)
+    const keys = Object.keys(allDays).sort();
+    const relevantKeys = range === 'week' ? 
+      Array.from({length:7}, (_,i)=>localDayKey(addDays(new Date(), -6+i))) :
+      keys.slice(-14);
+    
+    lineData = relevantKeys.map(k => {
+      const bucket = allDays[k] || {};
+      const val = Object.entries(bucket).reduce((s,[key,v]) => key==='__hours__'?s:s+(typeof v==='number'?v:0), 0);
+      const dt = new Date(k);
+      const lbl = isNaN(dt) ? k : `${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dt.getDay()]} ${dt.getDate()}`;
+      return { label: lbl, value: val };
+    });
+  }
+
+  if (lineData.length > 0 && lineData.some(d => d.value > 0)) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...TEXT_DARK);
+    doc.text("ACTIVITY TREND", 14, nextY);
+    nextY += 5;
+
+    const chartW = 175;
+    const chartH = 30;
+    const startX = 20;
+    const startY = nextY;
+    
+    const maxVal = Math.max(...lineData.map(d => d.value)) || 1;
+    
+    // Draw Grid & Labels
+    doc.setDrawColor(240, 240, 245);
+    doc.setLineWidth(0.1);
+    for(let i=0; i<=3; i++) {
+      const gy = startY + (chartH * i / 3);
+      doc.line(startX, gy, startX + chartW, gy);
+
+      // Y-axis Labels (Time track vertically)
+      const val = maxVal * (1 - i / 3);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6);
+      doc.setTextColor(...TEXT_MUTED);
+      doc.text(formatAxisDuration(val), startX - 2, gy + 1, { align: "right" });
+    }
+
+    // Draw Line (Smooth Curve)
+    doc.setDrawColor(...BRAND_RED);
+    doc.setLineWidth(0.6);
+    const points = lineData.map((d, i) => ({
+      x: startX + (i * chartW / (lineData.length - 1 || 1)),
+      y: startY + chartH - (d.value * chartH / maxVal)
+    }));
+
+    for(let i=0; i<points.length - 1; i++) {
+      const p0 = points[i];
+      const p3 = points[i+1];
+      // Control points for a monotone cubic interpolation
+      const p1 = { x: (p0.x + p3.x) / 2, y: p0.y };
+      const p2 = { x: (p0.x + p3.x) / 2, y: p3.y };
+      
+      const steps = 15;
+      let prev = p0;
+      for (let step = 1; step <= steps; step++) {
+        const t = step / steps;
+        const mt = 1 - t;
+        const x = mt*mt*mt*p0.x + 3*mt*mt*t*p1.x + 3*mt*t*t*p2.x + t*t*t*p3.x;
+        const y = mt*mt*mt*p0.y + 3*mt*mt*t*p1.y + 3*mt*t*t*p2.y + t*t*t*p3.y;
+        doc.line(prev.x, prev.y, x, y);
+        prev = { x, y };
+      }
+    }
+    
+    // X-Axis Labels (sampled)
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(...TEXT_MUTED);
+    const skip = Math.ceil(lineData.length / 7);
+    lineData.forEach((d, i) => {
+      if (i % skip === 0 || i === lineData.length - 1) {
+        const lx = startX + (i * chartW / (lineData.length - 1 || 1));
+        doc.text(d.label, lx, startY + chartH + 4, { align: "center" });
+      }
+    });
+
+    nextY += chartH + 12;
   }
 
   // --- Table ---
-  const tableData = entries.map(([host, sec], index) => [
-    (index + 1).toString().padStart(2, '0'),
-    host,
-    formatDuration(sec),
-    ((sec / totalSec) * 100).toFixed(1) + "%"
-  ]);
+  const tableData = entries.map(([host, sec], index) => {
+    const cat = categories[host] || 'neutral';
+    const catLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
+    return [
+      (index + 1).toString().padStart(2, '0'),
+      host,
+      catLabel,
+      formatDuration(sec),
+      ((sec / totalSec) * 100).toFixed(1) + "%"
+    ];
+  });
 
   doc.autoTable({
     startY: nextY,
-    head: [["#", "WEBSITE", "DURATION", "SHARE"]],
+    head: [["#", "WEBSITE", "CATEGORY", "DURATION", "SHARE"]],
     body: tableData,
     theme: 'striped',
     headStyles: { 
@@ -1990,10 +2070,11 @@ async function generatePDF(aggregated, title, filename, range = "today", allDays
       fillColor: BG_STRIPE 
     },
     columnStyles: {
-      0: { cellWidth: 12 },
+      0: { cellWidth: 10 },
       1: { cellWidth: 'auto' },
-      2: { cellWidth: 35, halign: 'left', fontStyle: 'bold', textColor: TEXT_DARK },
-      3: { cellWidth: 25, halign: 'right' }
+      2: { cellWidth: 28 },
+      3: { cellWidth: 30, halign: 'left', fontStyle: 'bold', textColor: TEXT_DARK },
+      4: { cellWidth: 20, halign: 'right' }
     },
     margin: { left: 14, right: 14 },
     styles: {
@@ -2048,3 +2129,315 @@ if (overlayBtnPdfCustom) {
     handlePdfExport("custom", overlayInputPdfStart.value, overlayInputPdfEnd.value);
   });
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  Productivity Pulse — Site Categorization & Scoring
+// ═══════════════════════════════════════════════════════════════
+
+const STORAGE_CATEGORIES = "siteCategories";
+
+// Default presets (applied on first use)
+const DEFAULT_PRODUCTIVE = [
+  'github.com', 'stackoverflow.com', 'gitlab.com', 'docs.google.com',
+  'notion.so', 'linear.app', 'figma.com', 'codepen.io', 'leetcode.com',
+  'coursera.org', 'udemy.com', 'developer.mozilla.org', 'w3schools.com',
+  'medium.com', 'dev.to', 'kaggle.com', 'replit.com'
+];
+
+const DEFAULT_DISTRACTING = [
+  'youtube.com', 'facebook.com', 'instagram.com', 'twitter.com', 'x.com',
+  'reddit.com', 'tiktok.com', 'netflix.com', 'twitch.tv', 'discord.com',
+  'snapchat.com', 'pinterest.com', 'buzzfeed.com', 'tumblr.com', '9gag.com'
+];
+
+/** Guard to prevent our own saves from triggering re-render via storage listener */
+let _pulseSelfSaving = false;
+
+async function loadSiteCategories() {
+  const { [STORAGE_CATEGORIES]: cats } = await chrome.storage.local.get(STORAGE_CATEGORIES);
+  return cats && typeof cats === 'object' ? cats : null;
+}
+
+async function saveSiteCategories(cats) {
+  _pulseSelfSaving = true;
+  await chrome.storage.local.set({ [STORAGE_CATEGORIES]: cats });
+  _pulseSelfSaving = false;
+}
+
+/** Ensure defaults are set on first use */
+let _cachedCategories = null;
+
+async function ensureDefaultCategories() {
+  if (_cachedCategories !== null) return _cachedCategories;
+
+  let cats = await loadSiteCategories();
+  if (cats !== null) {
+    _cachedCategories = cats;
+    return cats;
+  }
+
+  // First time: seed from defaults
+  cats = {};
+  DEFAULT_PRODUCTIVE.forEach(h => { cats[h] = 'productive'; });
+  DEFAULT_DISTRACTING.forEach(h => { cats[h] = 'distracting'; });
+  await saveSiteCategories(cats);
+  _cachedCategories = cats;
+  return cats;
+}
+
+/**
+ * Calculate productivity score 0-100.
+ * Algorithm:
+ *   score = ((productiveTime - distractingTime * 0.5) / totalTime) * 100
+ *   Clamped to 0-100. If no categorized time, returns 50 (neutral).
+ */
+function calculateProductivityScore(aggregated, categories) {
+  let productiveTime = 0;
+  let neutralTime = 0;
+  let distractingTime = 0;
+  let totalTime = 0;
+
+  for (const [host, sec] of Object.entries(aggregated)) {
+    if (typeof sec !== 'number' || sec <= 0) continue;
+    totalTime += sec;
+    const cat = categories[host] || 'neutral';
+    if (cat === 'productive') productiveTime += sec;
+    else if (cat === 'distracting') distractingTime += sec;
+    else neutralTime += sec;
+  }
+
+  if (totalTime === 0) return { score: 0, productiveTime, neutralTime, distractingTime, totalTime };
+
+  // Score: productive boosts, distracting penalizes, neutral is baseline 50
+  const productiveRatio = productiveTime / totalTime;
+  const distractingRatio = distractingTime / totalTime;
+
+  // Pure productive = 100, pure distracting = 0, pure neutral = 50
+  // Blend: 50 + (productiveRatio * 50) - (distractingRatio * 50)
+  let score = Math.round(50 + (productiveRatio * 50) - (distractingRatio * 50));
+  score = Math.max(0, Math.min(100, score));
+
+  return { score, productiveTime, neutralTime, distractingTime, totalTime };
+}
+
+/** Get insight text based on score */
+function getScoreInsight(score, totalTime) {
+  if (totalTime === 0) return 'Start browsing to see your productivity score!';
+  if (score >= 85) return 'Incredible focus! You\'re on fire today.';
+  if (score >= 70) return 'Great job! You\'re staying productive.';
+  if (score >= 55) return 'Not bad! Try to reduce distractions a bit.';
+  if (score >= 40) return 'Room for improvement. Categorize more sites!';
+  if (score >= 20) return 'High distraction time. Try focusing on tasks.';
+  return 'Time to reset! Close distracting tabs and focus.';
+}
+
+/** Get score color class */
+function getScoreClass(score) {
+  if (score >= 65) return 'score-high';
+  if (score >= 35) return 'score-mid';
+  return 'score-low';
+}
+
+// Pulse DOM references
+const pulseScoreValue = document.getElementById('pulse-score-value');
+const pulseRingFg = document.getElementById('pulse-ring-fg');
+const pulseScoreInsight = document.getElementById('pulse-score-insight');
+const pulseBarProductive = document.getElementById('pulse-bar-productive');
+const pulseBarNeutral = document.getElementById('pulse-bar-neutral');
+const pulseBarDistracting = document.getElementById('pulse-bar-distracting');
+const pulsePctProductive = document.getElementById('pulse-pct-productive');
+const pulsePctNeutral = document.getElementById('pulse-pct-neutral');
+const pulsePctDistracting = document.getElementById('pulse-pct-distracting');
+const pulseTimeProductive = document.getElementById('pulse-time-productive');
+const pulseTimeNeutral = document.getElementById('pulse-time-neutral');
+const pulseTimeDistracting = document.getElementById('pulse-time-distracting');
+const pulseSitesList = document.getElementById('pulse-sites-list');
+
+/**
+ * Fingerprint split:
+ *  - lastPulseScoreFP  → controls score ring, bar, cards (lightweight DOM updates)
+ *  - lastPulseSitesFP  → controls full site list rebuild (heavy DOM rebuild)
+ */
+let lastPulseScoreFP = null;
+let lastPulseSitesFP = null;
+
+async function renderPulsePanel(aggregated) {
+  const categories = await ensureDefaultCategories();
+  const result = calculateProductivityScore(aggregated, categories);
+  const { score, productiveTime, neutralTime, distractingTime, totalTime } = result;
+
+  // ── Score / Bar / Cards (lightweight in-place updates) ──
+  const scoreFP = `${score}|${productiveTime}|${neutralTime}|${distractingTime}`;
+  if (scoreFP !== lastPulseScoreFP) {
+    lastPulseScoreFP = scoreFP;
+
+    // Score Ring
+    const circumference = 2 * Math.PI * 68; // ~427.26
+    const offset = circumference - (score / 100) * circumference;
+    const scoreClass = getScoreClass(score);
+
+    if (pulseRingFg) {
+      pulseRingFg.style.strokeDashoffset = offset;
+      pulseRingFg.classList.remove('score-low', 'score-mid', 'score-high');
+      pulseRingFg.classList.add(scoreClass);
+    }
+
+    if (pulseScoreValue) {
+      pulseScoreValue.textContent = score;
+      pulseScoreValue.classList.remove('score-low', 'score-mid', 'score-high');
+      pulseScoreValue.classList.add(scoreClass);
+    }
+
+    if (pulseScoreInsight) {
+      pulseScoreInsight.textContent = getScoreInsight(score, totalTime);
+    }
+
+    // Breakdown Bar
+    if (totalTime > 0) {
+      const pPct = Math.round((productiveTime / totalTime) * 100);
+      const dPct = Math.round((distractingTime / totalTime) * 100);
+      const nPct = 100 - pPct - dPct;
+
+      if (pulseBarProductive) pulseBarProductive.style.width = `${pPct}%`;
+      if (pulseBarNeutral) pulseBarNeutral.style.width = `${nPct}%`;
+      if (pulseBarDistracting) pulseBarDistracting.style.width = `${dPct}%`;
+      if (pulsePctProductive) pulsePctProductive.textContent = `${pPct}%`;
+      if (pulsePctNeutral) pulsePctNeutral.textContent = `${nPct}%`;
+      if (pulsePctDistracting) pulsePctDistracting.textContent = `${dPct}%`;
+    } else {
+      if (pulseBarProductive) pulseBarProductive.style.width = '0%';
+      if (pulseBarNeutral) pulseBarNeutral.style.width = '0%';
+      if (pulseBarDistracting) pulseBarDistracting.style.width = '0%';
+      if (pulsePctProductive) pulsePctProductive.textContent = '0%';
+      if (pulsePctNeutral) pulsePctNeutral.textContent = '0%';
+      if (pulsePctDistracting) pulsePctDistracting.textContent = '0%';
+    }
+
+    // Category Cards
+    if (pulseTimeProductive) pulseTimeProductive.textContent = formatDuration(productiveTime);
+    if (pulseTimeNeutral) pulseTimeNeutral.textContent = formatDuration(neutralTime);
+    if (pulseTimeDistracting) pulseTimeDistracting.textContent = formatDuration(distractingTime);
+  }
+
+  // ── Site Categorization List (heavy rebuild, only when structure changes) ──
+  // Build a fingerprint from the host list + their categories (NOT their time values)
+  const entries = sortedEntries(aggregated);
+  const sitesFP = entries.map(([h]) => `${h}:${categories[h] || 'neutral'}`).join('|');
+
+  if (sitesFP !== lastPulseSitesFP) {
+    lastPulseSitesFP = sitesFP;
+    renderPulseSitesList(entries, categories);
+  } else {
+    // Just patch the time values in existing rows without rebuilding
+    patchPulseSiteTimes(entries);
+  }
+}
+
+/** Full rebuild of the site list — only called when hosts or categories change */
+function renderPulseSitesList(entries, categories) {
+  if (!pulseSitesList) return;
+
+  if (!entries.length) {
+    pulseSitesList.innerHTML = `
+      <div class="pulse-empty">
+        <div class="pulse-empty-icon">📊</div>
+        <div class="pulse-empty-text">No tracked sites yet. Start browsing to categorize your sites.</div>
+      </div>`;
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+
+  entries.forEach(([host, sec]) => {
+    const cat = categories[host] || 'neutral';
+    const row = document.createElement('div');
+    row.className = 'pulse-site-row';
+    row.dataset.host = host;
+
+    // Site info
+    const info = document.createElement('div');
+    info.className = 'pulse-site-info';
+
+    const hostEl = document.createElement('div');
+    hostEl.className = 'pulse-site-host';
+    hostEl.textContent = host;
+    hostEl.title = host;
+
+    const timeEl = document.createElement('div');
+    timeEl.className = 'pulse-site-time';
+    timeEl.textContent = formatDuration(sec);
+
+    info.appendChild(hostEl);
+    info.appendChild(timeEl);
+
+    // Toggle
+    const toggle = document.createElement('div');
+    toggle.className = 'pulse-toggle';
+
+    const makeBtn = (label, value) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pulse-toggle-btn';
+      btn.textContent = label;
+      btn.dataset.cat = value;
+      if (cat === value) {
+        btn.classList.add(`is-active-${value}`);
+      }
+      btn.addEventListener('click', async () => {
+        // Update cached categories in-place
+        const cats = await ensureDefaultCategories();
+        cats[host] = value;
+        _cachedCategories = cats;
+        await saveSiteCategories(cats);
+        // Force full re-render
+        lastPulseScoreFP = null;
+        lastPulseSitesFP = null;
+        lastListFingerprint = null;
+        loadAndPaint();
+      });
+      return btn;
+    };
+
+    toggle.appendChild(makeBtn('✓', 'productive'));
+    toggle.appendChild(makeBtn('—', 'neutral'));
+    toggle.appendChild(makeBtn('✗', 'distracting'));
+
+    row.appendChild(info);
+    row.appendChild(toggle);
+    frag.appendChild(row);
+  });
+
+  pulseSitesList.replaceChildren(frag);
+}
+
+/** Patch only time values in existing rows without rebuilding the DOM */
+function patchPulseSiteTimes(entries) {
+  if (!pulseSitesList) return;
+  const rows = pulseSitesList.querySelectorAll('.pulse-site-row');
+  const timeMap = Object.fromEntries(entries);
+
+  rows.forEach(row => {
+    const host = row.dataset.host;
+    if (host && timeMap[host] !== undefined) {
+      const timeEl = row.querySelector('.pulse-site-time');
+      if (timeEl) {
+        const newText = formatDuration(timeMap[host]);
+        if (timeEl.textContent !== newText) {
+          timeEl.textContent = newText;
+        }
+      }
+    }
+  });
+}
+
+// Listen for category changes from other contexts (not our own saves)
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes[STORAGE_CATEGORIES] && !_pulseSelfSaving) {
+    _cachedCategories = null; // Bust cache so we re-read
+    lastPulseScoreFP = null;
+    lastPulseSitesFP = null;
+    if (currentView === 'pulse') {
+      loadAndPaint();
+    }
+  }
+});

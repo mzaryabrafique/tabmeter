@@ -192,6 +192,9 @@
       <button type="button" class="view-tab" data-view="reports" role="tab" aria-selected="false" id="view-reports">
         Reports
       </button>
+      <button type="button" class="view-tab" data-view="pulse" role="tab" aria-selected="false" id="view-pulse">
+        Pulse
+      </button>
     </div>
   </header>
 
@@ -258,6 +261,85 @@
         </div>
       </div>
     </section>
+  </div>
+
+  <!-- Pulse Panel -->
+  <div id="panel-pulse" class="panel panel--pulse is-hidden" aria-hidden="true">
+    <!-- Score Ring -->
+    <div class="pulse-score-section">
+      <div class="pulse-score-ring-wrap">
+        <svg id="pulse-score-svg" class="pulse-score-svg" viewBox="0 0 160 160" aria-label="Productivity Score">
+          <circle class="pulse-ring-bg" cx="80" cy="80" r="68" />
+          <circle id="pulse-ring-fg" class="pulse-ring-fg" cx="80" cy="80" r="68" />
+        </svg>
+        <div class="pulse-score-center">
+          <span id="pulse-score-value" class="pulse-score-value">0</span>
+          <span class="pulse-score-label">Productivity Score</span>
+        </div>
+      </div>
+      <p id="pulse-score-insight" class="pulse-score-insight">Categorize your sites to see your score</p>
+    </div>
+
+    <!-- Breakdown Bar -->
+    <div class="pulse-breakdown-section">
+      <h3 class="pulse-section-title">Time Breakdown</h3>
+      <div class="pulse-breakdown-bar-wrap">
+        <div id="pulse-bar-productive" class="pulse-bar-segment pulse-bar-productive" style="width:0%"></div>
+        <div id="pulse-bar-neutral" class="pulse-bar-segment pulse-bar-neutral" style="width:0%"></div>
+        <div id="pulse-bar-distracting" class="pulse-bar-segment pulse-bar-distracting" style="width:0%"></div>
+      </div>
+      <div class="pulse-breakdown-legend">
+        <span class="pulse-legend-item"><span class="pulse-legend-dot pulse-dot-productive"></span>Productive <strong id="pulse-pct-productive">0%</strong></span>
+        <span class="pulse-legend-item"><span class="pulse-legend-dot pulse-dot-neutral"></span>Neutral <strong id="pulse-pct-neutral">0%</strong></span>
+        <span class="pulse-legend-item"><span class="pulse-legend-dot pulse-dot-distracting"></span>Distracting <strong id="pulse-pct-distracting">0%</strong></span>
+      </div>
+    </div>
+
+    <!-- Category Summary Cards -->
+    <div class="pulse-cards">
+      <div class="pulse-card pulse-card-productive">
+        <div class="pulse-card-icon" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+        </div>
+        <div class="pulse-card-body">
+          <span class="pulse-card-label">Productive</span>
+          <span id="pulse-time-productive" class="pulse-card-time">0s</span>
+        </div>
+      </div>
+      <div class="pulse-card pulse-card-neutral">
+        <div class="pulse-card-icon" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="8" y1="12" x2="16" y2="12"/>
+          </svg>
+        </div>
+        <div class="pulse-card-body">
+          <span class="pulse-card-label">Neutral</span>
+          <span id="pulse-time-neutral" class="pulse-card-time">0s</span>
+        </div>
+      </div>
+      <div class="pulse-card pulse-card-distracting">
+        <div class="pulse-card-icon" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <div class="pulse-card-body">
+          <span class="pulse-card-label">Distracting</span>
+          <span id="pulse-time-distracting" class="pulse-card-time">0s</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Site Categorization -->
+    <div class="pulse-sites-section">
+      <h3 class="pulse-section-title">Categorize Sites</h3>
+      <div id="pulse-sites-list" class="pulse-sites-list"></div>
+    </div>
   </div>
 
   <!-- Settings Panel (inline in popup) -->
