@@ -986,18 +986,31 @@ function renderLineChart(container, entries) {
     );
   }
 
-  // Data point dots
-  points.forEach((p) => {
-    svg.appendChild(
-      elSvg("circle", {
-        cx: p.x,
-        cy: p.y,
-        r: p.isToday ? "4" : "2.5",
-        fill: p.isToday ? "#ff3b34" : "#ffffff",
-        stroke: "#ff3b34",
-        "stroke-width": p.isToday ? "2" : "1.5",
-      })
-    );
+  // ── Crosshair vertical line (hidden by default) ──────────────────
+  const crosshair = elSvg("line", {
+    x1: 0, y1: padT,
+    x2: 0, y2: padT + chartH,
+    stroke: "#ff3b34",
+    "stroke-width": "1",
+    "stroke-dasharray": "3,3",
+    opacity: "0",
+    "pointer-events": "none",
+  });
+  svg.appendChild(crosshair);
+
+  // Data point dots — keep references for hover enlargement
+  const dotEls = points.map((p) => {
+    const circle = elSvg("circle", {
+      cx: p.x,
+      cy: p.y,
+      r: p.isToday ? "4" : "2.5",
+      fill: p.isToday ? "#ff3b34" : "#ffffff",
+      stroke: "#ff3b34",
+      "stroke-width": p.isToday ? "2" : "1.5",
+      "pointer-events": "none",
+    });
+    svg.appendChild(circle);
+    return circle;
   });
 
   // X-axis labels — show at most 8 evenly spaced
@@ -1017,6 +1030,67 @@ function renderLineChart(container, entries) {
     lab.textContent = p.label;
     svg.appendChild(lab);
   });
+
+  // ── Hover hit zones (one vertical strip per data point) ──────────
+  let activeIdx = -1;
+  const slotW = n > 1 ? chartW / (n - 1) : chartW;
+
+  function activatePoint(idx, mouseEvent) {
+    if (idx === activeIdx && idx >= 0) return;
+    // Reset previous dot
+    if (activeIdx >= 0) {
+      const prev = points[activeIdx];
+      dotEls[activeIdx].setAttribute("r", prev.isToday ? "4" : "2.5");
+      dotEls[activeIdx].setAttribute("fill", prev.isToday ? "#ff3b34" : "#ffffff");
+      dotEls[activeIdx].setAttribute("stroke-width", prev.isToday ? "2" : "1.5");
+    }
+    activeIdx = idx;
+    if (idx < 0) {
+      crosshair.setAttribute("opacity", "0");
+      hideChartTooltip();
+      return;
+    }
+    const p = points[idx];
+    // Enlarge & fill active dot
+    dotEls[idx].setAttribute("r", "5");
+    dotEls[idx].setAttribute("fill", "#ff3b34");
+    dotEls[idx].setAttribute("stroke-width", "2.5");
+    // Move crosshair
+    crosshair.setAttribute("x1", p.x);
+    crosshair.setAttribute("x2", p.x);
+    crosshair.setAttribute("opacity", "0.55");
+    // Show tooltip
+    if (mouseEvent) showChartTooltip(mouseEvent, `${p.label}\n${formatDuration(p.value)}`);
+  }
+
+  points.forEach((p, i) => {
+    // Each hit zone spans from midpoint to the left to midpoint to the right
+    const hitX = i === 0 ? padL : p.x - slotW / 2;
+    const hitW = i === n - 1 ? (padL + chartW) - hitX : slotW;
+
+    const hit = elSvg("rect", {
+      x: hitX,
+      y: padT,
+      width: Math.max(hitW, 1),
+      height: chartH,
+      fill: "transparent",
+      style: "cursor:crosshair",
+    });
+    hit.addEventListener("mouseenter", (e) => activatePoint(i, e));
+    hit.addEventListener("mousemove", (e) => {
+      // Re-show tooltip with updated mouse position
+      showChartTooltip(e, `${p.label}\n${formatDuration(p.value)}`);
+      if (activeIdx !== i) activatePoint(i, e);
+    });
+    hit.addEventListener("mouseleave", () => {
+      // Small delay so adjacent zone mouseenter fires first
+      setTimeout(() => { if (activeIdx === i) activatePoint(-1, null); }, 30);
+    });
+    svg.appendChild(hit);
+  });
+
+  // Dismiss when leaving the SVG entirely
+  svg.addEventListener("mouseleave", () => activatePoint(-1, null));
 
   container.appendChild(svg);
 }
