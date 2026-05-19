@@ -484,6 +484,60 @@ function elSvg(name, attrs = {}) {
   return n;
 }
 
+// ─── Chart Tooltip ───────────────────────────────────────────────
+let _chartTooltipEl = null;
+
+function getChartTooltip() {
+  if (!_chartTooltipEl) {
+    _chartTooltipEl = document.createElement("div");
+    _chartTooltipEl.id = "chart-tooltip";
+    _chartTooltipEl.style.cssText = [
+      "position:fixed",
+      "z-index:9999",
+      "pointer-events:none",
+      "background:rgba(24,24,27,0.92)",
+      "color:#f4f4f5",
+      "font:600 11px/1.5 system-ui,sans-serif",
+      "padding:6px 10px",
+      "border-radius:8px",
+      "box-shadow:0 4px 16px rgba(0,0,0,0.28)",
+      "white-space:pre",
+      "backdrop-filter:blur(4px)",
+      "opacity:0",
+      "transition:opacity 0.12s ease",
+      "max-width:220px",
+      "word-break:break-all",
+    ].join(";");
+    document.body.appendChild(_chartTooltipEl);
+  }
+  return _chartTooltipEl;
+}
+
+function showChartTooltip(e, text) {
+  const tip = getChartTooltip();
+  tip.textContent = text;
+  tip.style.opacity = "1";
+  positionChartTooltip(e, tip);
+}
+
+function positionChartTooltip(e, tip) {
+  const margin = 12;
+  const tipW = tip.offsetWidth || 160;
+  const tipH = tip.offsetHeight || 40;
+  let x = e.clientX + margin;
+  let y = e.clientY - tipH / 2;
+  if (x + tipW > window.innerWidth - 4) x = e.clientX - tipW - margin;
+  if (y < 4) y = 4;
+  if (y + tipH > window.innerHeight - 4) y = window.innerHeight - tipH - 4;
+  tip.style.left = `${x}px`;
+  tip.style.top = `${y}px`;
+}
+
+function hideChartTooltip() {
+  if (_chartTooltipEl) _chartTooltipEl.style.opacity = "0";
+}
+// ─────────────────────────────────────────────────────────────────
+
 function renderHorizontalBarChart(svg, aggregated) {
   const entries = sortedEntries(aggregated);
   const shown = entries.slice(0, LIST_TOP);
@@ -596,6 +650,25 @@ function renderHorizontalBarChart(svg, aggregated) {
     });
     timeLab.textContent = formatDuration(sec);
     svg.appendChild(timeLab);
+
+    // Transparent hit-area for hover tooltip
+    const hitRect = elSvg("rect", {
+      x: 0,
+      y: y,
+      width: W,
+      height: rowH,
+      fill: "transparent",
+      style: "cursor:default",
+    });
+    const pct = total > 0 ? ((sec / total) * 100).toFixed(1) : "0.0";
+    hitRect.addEventListener("mouseenter", (e) => {
+      showChartTooltip(e, `${host}\n${formatDuration(sec)} · ${pct}%`);
+    });
+    hitRect.addEventListener("mousemove", (e) => {
+      showChartTooltip(e, `${host}\n${formatDuration(sec)} · ${pct}%`);
+    });
+    hitRect.addEventListener("mouseleave", hideChartTooltip);
+    svg.appendChild(hitRect);
   });
 
   const caption = `Bar length is exact time per site (top ${LIST_TOP}${otherSec > 0 ? ", plus Other" : ""}). Axis shows total span.`;
@@ -689,6 +762,9 @@ function renderWeekStackedChart(svg, series) {
     lbl.textContent = label;
     svg.appendChild(lbl);
 
+    // Build tooltip info for this day's stacked bar
+    const dayTotal = totalBucketSeconds(bucket);
+    const tooltipLines = [`${label}  ·  ${formatDuration(dayTotal)}`];
     let yTop = chartBottom;
     for (const key of stackKeysBase) {
       let sec = 0;
@@ -706,18 +782,39 @@ function renderWeekStackedChart(svg, series) {
       yTop -= hPx;
       const fill =
         key === "__other__" ? colorOther() : colorForIndex(topHosts.indexOf(key));
-      svg.appendChild(
-        elSvg("rect", {
-          x: cx - barW / 2,
-          y: yTop,
-          width: barW,
-          height: hPx,
-          fill,
-          stroke: "#fff",
-          "stroke-width": "0.5",
-        })
-      );
+      const segRect = elSvg("rect", {
+        x: cx - barW / 2,
+        y: yTop,
+        width: barW,
+        height: hPx,
+        fill,
+        stroke: "#fff",
+        "stroke-width": "0.5",
+      });
+      const hostLabel = key === "__other__" ? "Other" : key;
+      const segTooltip = `${label}  ·  ${formatDuration(dayTotal)}\n${hostLabel}: ${formatDuration(sec)}`;
+      segRect.addEventListener("mouseenter", (e) => showChartTooltip(e, segTooltip));
+      segRect.addEventListener("mousemove", (e) => showChartTooltip(e, segTooltip));
+      segRect.addEventListener("mouseleave", hideChartTooltip);
+      svg.appendChild(segRect);
+      if (key !== "__other__") tooltipLines.push(`${key}: ${formatDuration(sec)}`);
     }
+
+    // Full-column transparent hit rect for the day (catches empty bar areas)
+    const barStartY = yTop;
+    const colHitRect = elSvg("rect", {
+      x: cx - barW / 2,
+      y: chartTop,
+      width: barW,
+      height: chartBottom - chartTop,
+      fill: "transparent",
+      style: "cursor:default",
+    });
+    const dayTooltip = tooltipLines.join("\n");
+    colHitRect.addEventListener("mouseenter", (e) => showChartTooltip(e, dayTooltip));
+    colHitRect.addEventListener("mousemove", (e) => showChartTooltip(e, dayTooltip));
+    colHitRect.addEventListener("mouseleave", hideChartTooltip);
+    svg.appendChild(colHitRect);
   }
 
   const yTicks = 4;
@@ -2070,8 +2167,8 @@ async function generatePDF(aggregated, title, filename, range = "today", allDays
       fillColor: BG_STRIPE 
     },
     columnStyles: {
-      0: { cellWidth: 10 },
-      1: { cellWidth: 'auto' },
+      0: { cellWidth: 16, halign: 'center' },
+      1: { cellWidth: 'auto', overflow: 'linebreak', minCellWidth: 30 },
       2: { cellWidth: 28 },
       3: { cellWidth: 30, halign: 'left', fontStyle: 'bold', textColor: TEXT_DARK },
       4: { cellWidth: 20, halign: 'right' }
